@@ -6,14 +6,22 @@ const config: Config = {
     "./src/components/**/*.{js,ts,jsx,tsx,mdx}",
     "./src/app/**/*.{js,ts,jsx,tsx,mdx}",
   ],
-  theme: {
-    extend: {
-      colors: {
-        background: "var(--background)",
-        foreground: "var(--foreground)",
-      },
-    },
-  },
-  plugins: [],
+  theme: {},
+  plugins: [
+    require('daisyui')
+  ],
+  daisyui: {
+    themes: [{
+      "woohp": {
+        "color-scheme"     : "light",
+        "primary"          : "#f9af03",
+        "primary-content"  : "#000025",
+        "secondary"        : "#0196ed",
+        "secondary-content": "#f7ffff",
+        "base-100"         : "#fb7e7e"
+      }
+    }]
+  }
 };
+
 export default config;
