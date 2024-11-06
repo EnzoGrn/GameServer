@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { DM_Sans } from 'next/font/google'
+import Document, { Html, Head, Main, NextScript } from 'next/document';
 import "./globals.css";
 
 /*
@@ -22,7 +23,10 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode; }>)
 {
   return (
-    <html lang="en" data-theme="woohp">
+    <html>
+      <head>
+        <link href="https://fonts.googleapis.com/css2?family=Patrick+Hand&display=swap" rel="stylesheet" />
+      </head>
       <body className={font.className}>
         {children}
       </body>
