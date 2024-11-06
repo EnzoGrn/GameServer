@@ -10,7 +10,7 @@ export default function Home()
   };
 
   return (
-    <div className="flex flex-col md:flex-row min-h-screen bg-gray-100">
+    <div className="flex flex-col md:flex-row min-h-screen w-full">
       <div className="w-full md:w-1/4 p-4 bg-white shadow-md order-2 md:order-1">
         <h2 className="text-xl font-semibold mb-4">Joueurs</h2>
         <ul>
