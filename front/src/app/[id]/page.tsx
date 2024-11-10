@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 
-export default function Game()
-{  
+export default function Page({ params }: { params: { id: string } })
+{ 
   const [message, setMessage] = useState('');
   const [timeLeft, setTimeLeft] = useState(45); // Example timer value
   const wordToGuess = "Chat"; // Example word to guess

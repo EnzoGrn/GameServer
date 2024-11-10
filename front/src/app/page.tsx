@@ -1,5 +1,7 @@
 'use client'
 
+import { useRouter } from 'next/navigation';
+
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { io } from "socket.io-client";
@@ -35,7 +37,14 @@ interface Room {
 }
 
 
-export default function Home() {
+export default function Home()
+{
+  const router = useRouter();
+
+  const navigateToGameRoom = (id: string) => {
+    router.push(`/${id}`);
+  }
+
   const [socket, setSocket] = useState<any>(null);
   const [playerName, setPlayerName] = useState<string>("");
   const [availableRooms, setAvailableRooms] = useState<{ [key: string]: Room }>({});
@@ -75,7 +84,8 @@ export default function Home() {
         timestamp: Date.now()
       };
       socket.emit("create-room", data);
-      // Navigate to the room "/game/[roomId]"
+
+      navigateToGameRoom(data.roomId);
     }
   };
 
@@ -89,6 +99,8 @@ export default function Home() {
         timestamp: Date.now()
       };
       socket.emit("join-room", data);
+
+      navigateToGameRoom('12345-67890');
     }
   };
 
@@ -124,7 +136,7 @@ export default function Home() {
             onChange={(e) => setPlayerName(e.target.value)}
             className="w-full p-2 mb-4 border border-gray-300 rounded-md"
           />
-          {/* <div className="space-y-2">
+          {/*<div className="space-y-2">
             <label className="block">
               Nombre de joueurs :
               <input
@@ -147,7 +159,7 @@ export default function Home() {
                 <option>Anglais</option>
               </select>
             </label>
-          </div> */}
+          </div>*/}
           <button
             onClick={createRoom}
             className="w-full mt-4 bg-blue-500 hover:bg-blue-600 text-white py-2 rounded-md"
