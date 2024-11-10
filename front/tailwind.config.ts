@@ -18,7 +18,8 @@ const config: Config = {
         "primary-content"  : "#000025",
         "secondary"        : "#0196ed",
         "secondary-content": "#f7ffff",
-        "base-100"         : "#fb7e7e"
+        "base-100"         : "#fb7e7e",
+        "base-content"     : "#1f2937"
       }
     }]
   }

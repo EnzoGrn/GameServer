@@ -28,7 +28,9 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         <link href="https://fonts.googleapis.com/css2?family=Patrick+Hand&display=swap" rel="stylesheet" />
       </head>
       <body className={font.className}>
-        {children}
+        <div className={`w-100 h-screen flex justify-center items-center flex-col overflow-hidden bg-[url('assets/background.png')]`}>
+          {children}
+        </div>
       </body>
     </html>
   );
