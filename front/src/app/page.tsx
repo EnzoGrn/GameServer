@@ -41,7 +41,7 @@ export default function Home()
 {
   const router = useRouter();
 
-  const navigateToGameRoom = (id: string) => {
+  const navigateToGameRoom = (id: string): void => {
     router.push(`/${id}`);
   }
 
@@ -80,9 +80,10 @@ export default function Home()
         roomId: generateRandomString(6),
         userAvatar: "",
         userId: socket.id,
-        playerName: playerName,
+        userName: playerName,
         timestamp: Date.now()
       };
+      console.log(data);
       socket.emit("create-room", data);
 
       navigateToGameRoom(data.roomId);
@@ -100,7 +101,7 @@ export default function Home()
       };
       socket.emit("join-room", data);
 
-      navigateToGameRoom('12345-67890');
+      navigateToGameRoom(roomId);
     }
   };
 
