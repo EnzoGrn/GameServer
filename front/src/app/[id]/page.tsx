@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import p5 from 'p5';
 import { Socket } from 'socket.io-client';
+import { useSocket } from '@/components/provider/SocketProvider';
 
 export default function Page({ params }: { params: { id: string } }) {
   const [message, setMessage] = useState('');
@@ -11,6 +12,7 @@ export default function Page({ params }: { params: { id: string } }) {
   const canvasParentRef = useRef<HTMLDivElement | null>(null);
   const [tool, setTool] = useState<'pencil' | 'eraser'>('pencil'); // Outil actif
   const [strokeWidth, setStrokeWidth] = useState(4); // Épaisseur du trait
+  const { socket } = useSocket();
 
   useEffect(() => {
     console.log('Socket:', socket);

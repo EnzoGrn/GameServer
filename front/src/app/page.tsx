@@ -1,5 +1,6 @@
 'use client';
 
+import { useSocket } from '@/components/provider/SocketProvider';
 import { useRouter } from 'next/navigation';
 import React, { useState, useEffect } from "react";
 import io, { Socket } from "socket.io-client";
@@ -36,13 +37,11 @@ interface Room {
 
 export default function Home() {
   const router = useRouter();
-  const [socket, setSocket] = useState<Socket | null>(null);
+  const { socket, setSocket } = useSocket();
   const [playerName, setPlayerName] = useState<string>('');
   const [availableRooms, setAvailableRooms] = useState<{ [key: string]: Room }>({});
 
   useEffect(() => {
-    const socket = io('http://localhost:3001');
-    setSocket(socket);
     if (socket) {
       console.log("Socket is connected");
       socket.on("send-all-rooms", (rooms: { [key: string]: Room }) => {
