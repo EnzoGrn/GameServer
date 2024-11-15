@@ -258,5 +258,7 @@ export function setupSocket(io: Server) {
       rooms[roomCode].roomSettings.wordCount = setting;
       io.to(roomCode).emit("update-settings", rooms[roomCode].roomSettings);
     });
+    
+    socket.on('mouse', (data) => socket.broadcast.emit('mouse', data))
   });
 }
