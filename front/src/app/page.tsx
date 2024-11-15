@@ -48,7 +48,6 @@ export default function Home() {
         setAvailableRooms(rooms);
         console.log(rooms);
       });
-
       socket.emit("get-all-rooms");
     }
 

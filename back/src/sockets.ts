@@ -31,6 +31,7 @@ export function setupSocket(io: Server) {
      * @returns {void} Cette fonction ne renvoie rien.
      */
     socket.on("get-all-rooms", () => {
+      console.log(rooms);
       socket.emit("send-all-rooms", rooms);
     });
 
@@ -258,7 +259,7 @@ export function setupSocket(io: Server) {
       rooms[roomCode].roomSettings.wordCount = setting;
       io.to(roomCode).emit("update-settings", rooms[roomCode].roomSettings);
     });
-    
+
     socket.on('mouse', (data) => socket.broadcast.emit('mouse', data))
   });
 }

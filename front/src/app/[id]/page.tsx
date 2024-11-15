@@ -20,10 +20,6 @@ export default function Page({ params }: { params: { id: string } }) {
     if (canvasParentRef.current && socket) {
       new p5((p: p5) => sketch(p, socket), canvasParentRef.current);
     }
-
-    return () => {
-      socket?.disconnect(); // Déconnexion propre de Socket.IO
-    };
   }, []);
 
   const sketch = (p: p5, socket: Socket) => {
