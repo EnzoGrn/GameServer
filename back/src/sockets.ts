@@ -3,7 +3,7 @@ import { Server, Socket } from "socket.io";
 import { rooms, createRoom } from "./rooms";
 import { Player } from "./types";
 import { addPlayerToRoom } from "./players";
-import { addJoinMessage } from "./messages";
+import { addJoinMessage, addStartGameConditionMessage, addMessage } from "./messages";
 
 export function setupSocket(io: Server) {
   io.on("connection", (socket: Socket) => {
@@ -31,8 +31,11 @@ export function setupSocket(io: Server) {
      * @returns {void} Cette fonction ne renvoie rien.
      */
     socket.on("get-all-rooms", () => {
-      console.log(rooms);
       socket.emit("send-all-rooms", rooms);
+    });
+
+    socket.on("get-room", (roomId) => {
+      socket.emit("send-room", rooms[roomId]);
     });
 
     /**
@@ -53,7 +56,7 @@ export function setupSocket(io: Server) {
      * @name room-data-updated
      * @description
      * L'événement "room-data-updated" est émis pour informer les clients de la mise à jour des données
-     * de la room (roomId, rooms).
+     * de la room spécifiée.
      * 
      * @param {Object} data Les données de la room à créer.
      * @param {string} data.roomId L'identifiant de la room.
@@ -66,7 +69,6 @@ export function setupSocket(io: Server) {
      * @returns {void} Cette fonction ne renvoie rien.
      */
     socket.on("create-room", ({ roomId, userAvatar, userId, userName, timestamp }) => {
-      console.log(userName);
       const initialPlayer: Player = {
         id: userId,
         userAvatar,
@@ -77,11 +79,10 @@ export function setupSocket(io: Server) {
         kicksGot: [],
         timestamp
       };
-      console.log(initialPlayer);
       const newRoom = createRoom(roomId, initialPlayer);
 
       socket.join(roomId);
-      io.to(roomId).emit("room-data-updated", { roomId, rooms });
+      io.to(roomId).emit("room-data-updated", { room: newRoom });
     });
 
     /**
@@ -113,8 +114,6 @@ export function setupSocket(io: Server) {
      * @returns {void} Cette fonction ne renvoie rien.
      */
     socket.on("join-room", ({ roomId, userAvatar, userId, userName, timestamp }) => {
-      console.log("Joining room:", roomId, "by", userId);
-
       // Vérifier si la room existe
       const room = rooms[roomId];
       if (!room) {
@@ -129,11 +128,8 @@ export function setupSocket(io: Server) {
       // Joindre la room avec Socket.io
       socket.join(roomId);
 
-      // Notifier les autres clients de la room
-      socket.to(roomId).emit("user-joined", { rooms, roomId, timestamp });
-
       // Mettre à jour les données de la room pour tous les clients
-      io.to(roomId).emit("room-data-updated", { roomId, rooms });
+      io.to(roomId).emit("room-data-updated", { room: rooms[roomId] });
     });
 
     /**
@@ -261,5 +257,25 @@ export function setupSocket(io: Server) {
     });
 
     socket.on('mouse', (data) => socket.broadcast.emit('mouse', data))
+
+    socket.on("start-condition-invalid", (roomCode) => {
+      const room = rooms[roomCode];
+      if (room) {
+        addStartGameConditionMessage(room);
+        io.to(roomCode).emit("room-data-updated", { room: rooms[roomCode] });
+      }
+    });
+
+    socket.on("message-sent", ({ roomCode, message }) => {
+      const room = rooms[roomCode];
+      console.log("message", message);
+      console.log("id", roomCode);
+      console.log("room", room);
+      const player = room?.players?.find((player) => player.id === socket.id);
+      if (room && player) {
+        addMessage(room, player.userName, message);
+        io.to(roomCode).emit("room-data-updated", { room });
+      }
+    });
   });
 }

@@ -4,8 +4,40 @@ import { useEffect, useRef, useState } from 'react';
 import p5 from 'p5';
 import { Socket } from 'socket.io-client';
 import { useSocket } from '@/components/provider/SocketProvider';
+import { useParams } from 'next/navigation'
 
-export default function Page({ params }: { params: { id: string } }) {
+interface Player {
+  id: string;
+  userName: string;
+  host: boolean;
+  hasGuessed: boolean;
+  kicksToOut: number;
+  kicksGot: Player[];
+  userAvatar?: string;
+  timestamp?: number;
+}
+
+interface Room {
+  id: string;
+  players: Player[];
+  messages: any[];
+  scoreBoard: any[];
+  useCustomWords: boolean;
+  customWords: string[];
+  whoGuessedIt: string[];
+  roomSettings: {
+    players: string;
+    language: string;
+    drawTime: string;
+    rounds: string;
+    wordCount: string;
+    hints: string;
+    private: boolean;
+  };
+}
+
+export default function Page() {
+  const params = useParams<{ id: string }>();
   const [message, setMessage] = useState('');
   const [timeLeft, setTimeLeft] = useState(45); // Exemple de timer
   const wordToGuess = "Chat"; // Exemple de mot à deviner
@@ -13,9 +45,18 @@ export default function Page({ params }: { params: { id: string } }) {
   const [tool, setTool] = useState<'pencil' | 'eraser'>('pencil'); // Outil actif
   const [strokeWidth, setStrokeWidth] = useState(4); // Épaisseur du trait
   const { socket } = useSocket();
+  const [room, setRoom] = useState<Room | null>(null);
 
   useEffect(() => {
     console.log('Socket:', socket);
+    console.log('Room ID:', params.id);
+    if (socket) {
+      socket.on('send-room', (room: Room) => {
+        setRoom(room);
+        console.log('Room:', room);
+      });
+      socket.emit('get-room', params.id);
+    }
     // Initialise p5.js
     if (canvasParentRef.current && socket) {
       new p5((p: p5) => sketch(p, socket), canvasParentRef.current);
@@ -80,6 +121,20 @@ export default function Page({ params }: { params: { id: string } }) {
     });
   }, [socket]);
 
+  const SendChatMessage = () => {
+    // Envoi du message via Socket.IO
+    console.log('Message:', message);
+    console.log("room", room);
+    console.log('Room ID:', room?.id);
+    socket?.emit('message-sent', { roomCode: room?.id, message });
+    setMessage('');
+  }
+
+  socket?.on('room-data-updated', ({ room }: { room: Room }) => {
+    console.log('Room updated:', room);
+    setRoom(room);
+  });
+
   return (
     <div className="flex flex-col min-h-screen w-full">
       {/* Barre du haut */}
@@ -111,17 +166,15 @@ export default function Page({ params }: { params: { id: string } }) {
           <div className="flex items-center space-x-2 md:space-x-4">
             <button
               onClick={() => setTool('pencil')}
-              className={`px-3 md:px-4 py-1 md:py-2 rounded-md ${
-                tool === 'pencil' ? 'bg-blue-500 text-white' : 'bg-gray-200'
-              }`}
+              className={`px-3 md:px-4 py-1 md:py-2 rounded-md ${tool === 'pencil' ? 'bg-blue-500 text-white' : 'bg-gray-200'
+                }`}
             >
               Crayon
             </button>
             <button
               onClick={() => setTool('eraser')}
-              className={`px-3 md:px-4 py-1 md:py-2 rounded-md ${
-                tool === 'eraser' ? 'bg-blue-500 text-white' : 'bg-gray-200'
-              }`}
+              className={`px-3 md:px-4 py-1 md:py-2 rounded-md ${tool === 'eraser' ? 'bg-blue-500 text-white' : 'bg-gray-200'
+                }`}
             >
               Gomme
             </button>
@@ -138,9 +191,12 @@ export default function Page({ params }: { params: { id: string } }) {
         <div className="w-full md:w-1/4 p-4 bg-white shadow-md flex flex-col order-3 md:order-3">
           <h2 className="text-xl font-semibold mb-4">Chat</h2>
           <div className="flex-1 overflow-y-auto space-y-2">
-            <div className="bg-blue-100 p-2 rounded-md">
-              <span className="font-bold">Joueur 1:</span> Bonne réponse !
-            </div>
+            {/* Boucle à travers les messages dans room.messages */}
+            {room?.messages?.map((msg, index) => (
+              <div key={index} className="bg-blue-100 p-2 rounded-md">
+                {msg.text}
+              </div>
+            ))}
           </div>
           <div className="mt-4 flex">
             <input
@@ -151,7 +207,7 @@ export default function Page({ params }: { params: { id: string } }) {
               className="w-full p-2 border border-gray-300 rounded-l-md"
             />
             <button
-              onClick={() => setMessage('')}
+              onClick={() => SendChatMessage()}
               className="bg-blue-500 hover:bg-blue-600 text-white px-3 md:px-4 rounded-r-md"
             >
               Envoyer
