@@ -3,7 +3,8 @@ import { Server, Socket } from "socket.io";
 import { rooms, createRoom } from "./rooms";
 import { Player } from "./types";
 import { addPlayerToRoom } from "./players";
-import { addJoinMessage, addStartGameConditionMessage, addMessage } from "./messages";
+import { addJoinMessage, addStartGameConditionMessage, addChangeHostMessage, addDisconnectMessage, checkMessage } from "./messages";
+import { selectWords } from "./words";
 
 export function setupSocket(io: Server) {
   io.on("connection", (socket: Socket) => {
@@ -124,7 +125,7 @@ export function setupSocket(io: Server) {
 
       // Ajouter le joueur et le message de jointure
       addJoinMessage(room, userName);
-      addPlayerToRoom(room, userId, userAvatar, userName );
+      addPlayerToRoom(room, userId, userAvatar, userName);
 
       // Joindre la room avec Socket.io
       socket.join(roomId);
@@ -166,27 +167,18 @@ export function setupSocket(io: Server) {
             delete rooms[room.id];
           }
 
-          const message = {
-            text: `${player.userName} disconnected!`,
-            timestamp: Date.now(),
-          };
-          room.messages.push(message);
+          addDisconnectMessage(room, player.userName);
 
           // Si l'hôte se déconnecte, choisir un nouveau hôte aléatoire
           if (player.host && room.players.length > 0) {
             const randomPlayer = room.players[Math.floor(Math.random() * room.players.length)];
-            const hostMessage = {
-              text: `${randomPlayer.userName} is the new host of the game!`,
-              timestamp: Date.now(),
-            };
 
             room.players = room.players.map((checker) =>
               checker.id === randomPlayer.id ? { ...checker, host: true } : checker
             );
 
-            room.messages.push(hostMessage);
+            addChangeHostMessage(room, randomPlayer.userName);
           }
-
           io.to(room.id).emit("player-disconnected");
         }
       }
@@ -224,59 +216,91 @@ export function setupSocket(io: Server) {
         delete rooms[roomCode];
       }
 
-      io.to(roomCode).emit("player-left");
+      io.to(roomCode).emit("room-data-updated", { room: rooms[roomCode] });
     });
 
     socket.on("set-custom-words-only", ({ roomCode, boolean }) => {
       rooms[roomCode].roomSettings.useCustomWords = boolean;
-      io.to(roomCode).emit("update-settings", rooms[roomCode].roomSettings);
+      io.to(roomCode).emit("room-data-updated", { room: rooms[roomCode] });
     });
 
     socket.on("set-number-rounds", ({ setting, roomCode }) => {
       rooms[roomCode].roomSettings.rounds = setting;
-      io.to(roomCode).emit("update-settings", rooms[roomCode].roomSettings);
+      io.to(roomCode).emit("room-data-updated", { room: rooms[roomCode] });
     });
 
     socket.on("set-draw-timer", ({ setting, roomCode }) => {
       rooms[roomCode].roomSettings.drawTime = setting;
-      io.to(roomCode).emit("update-settings", rooms[roomCode].roomSettings);
+      io.to(roomCode).emit("room-data-updated", { room: rooms[roomCode] });
     });
 
     socket.on("set-players-number", ({ setting, roomCode }) => {
       rooms[roomCode].roomSettings.players = setting;
-      io.to(roomCode).emit("update-settings", rooms[roomCode].roomSettings);
+      io.to(roomCode).emit("room-data-updated", { room: rooms[roomCode] });
     });
 
     socket.on("set-hints-number", ({ setting, roomCode }) => {
       rooms[roomCode].roomSettings.hints = setting;
-      io.to(roomCode).emit("update-settings", rooms[roomCode].roomSettings);
+      io.to(roomCode).emit("room-data-updated", { room: rooms[roomCode] });
     });
 
     socket.on("set-word-count", ({ setting, roomCode }) => {
       rooms[roomCode].roomSettings.wordCount = setting;
-      io.to(roomCode).emit("update-settings", rooms[roomCode].roomSettings);
+      io.to(roomCode).emit("room-data-updated", { room: rooms[roomCode] });
     });
 
-    socket.on('mouse', (data) => socket.broadcast.emit('mouse', data))
+    socket.on('mouse', (data) => socket.broadcast.emit('mouse', data));
 
-    socket.on("start-condition-invalid", (roomCode) => {
+    socket.on('clear-canvas', () => {
+      socket.broadcast.emit('clear-canvas');
+    });
+
+    socket.on("start-game", ({ roomCode }) => {
       const room = rooms[roomCode];
-      if (room) {
+
+      if (!room || room.players.length < 2) {
         addStartGameConditionMessage(room);
         io.to(roomCode).emit("room-data-updated", { room: rooms[roomCode] });
+        return;
       }
+
+      // Choisir le dernier joueur de la liste comme dessinateur
+      room.currentDrawer = room.players[room.players.length - 1];
+      room.currentRound = 1;
+
+      // Informer tous les clients que le jeu a commencé
+      io.to(roomCode).emit("game-started", { room: rooms[roomCode] });
     });
 
     socket.on("message-sent", ({ roomCode, message }) => {
+      message = message.trim();
       const room = rooms[roomCode];
-      console.log("message", message);
-      console.log("id", roomCode);
-      console.log("room", room);
       const player = room?.players?.find((player) => player.id === socket.id);
       if (room && player) {
-        addMessage(room, player.userName, message);
+        checkMessage(room, player, message);
         io.to(roomCode).emit("room-data-updated", { room });
       }
+    });
+
+    socket.on("get-word-list", ({ roomCode }) => {
+      console.log("Getting words for room:", roomCode);
+      const room = rooms[roomCode];
+      if (!room) {
+        return console.error("Room not found:", roomCode);
+      }
+    
+      const selectedWords = selectWords(room);
+      io.to(roomCode).emit("send-word-list", { selectedWords });
+    });
+
+    socket.on("word-chosen", ({ roomCode, word }) => {
+      const room = rooms[roomCode];
+      if (!room) {
+        return console.error("Room not found:", roomCode);
+      }
+    
+      room.currentWord = word;
+      io.to(roomCode).emit('start-timer', { room });
     });
   });
 }

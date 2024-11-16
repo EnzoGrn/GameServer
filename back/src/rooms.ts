@@ -9,14 +9,17 @@ export function createRoom(roomId: string, initialPlayer: Player, timestamp: num
     players: [initialPlayer],
     messages: [{
       text: `${initialPlayer.userName} is now the room owner!`,
-      timestamp
+      timestamp: 0,
     }],
     scoreBoard: [{
       playerId: initialPlayer.id,
       score: 0
     }],
-    whoGuessedIt: [],
     customWords: [],
+    whoGuessedIt: [],
+    currentWord: "",
+    currentDrawer: null,
+    currentRound: 0,
     roomSettings: {
       players: "8",
       language: "English",

@@ -3,37 +3,7 @@
 import { useSocket } from '@/components/provider/SocketProvider';
 import { useRouter } from 'next/navigation';
 import React, { useState, useEffect } from "react";
-import io, { Socket } from "socket.io-client";
-
-interface Player {
-  id: string; 
-  userName: string; 
-  host: boolean; 
-  hasGuessed: boolean;  
-  kicksToOut: number; 
-  kicksGot: Player[]; 
-  userAvatar?: string; 
-  timestamp?: number; 
-}
-
-interface Room {
-  id: string; 
-  players: Player[]; 
-  messages: any[]; 
-  scoreBoard: any[]; 
-  useCustomWords: boolean; 
-  customWords: string[]; 
-  whoGuessedIt: string[]; 
-  roomSettings: {
-    players: string; 
-    language: string; 
-    drawTime: string; 
-    rounds: string; 
-    wordCount: string; 
-    hints: string; 
-    private: boolean; 
-  };
-}
+import { Room } from '@/types';
 
 export default function Home() {
   const router = useRouter();
@@ -90,7 +60,7 @@ export default function Home() {
         roomId,
         userAvatar: "",
         userId: socket.id,
-        playerName: playerName,
+        userName: playerName,
         timestamp: Date.now()
       };
 

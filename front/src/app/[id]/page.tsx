@@ -5,52 +5,23 @@ import p5 from 'p5';
 import { Socket } from 'socket.io-client';
 import { useSocket } from '@/components/provider/SocketProvider';
 import { useParams } from 'next/navigation'
-
-interface Player {
-  id: string;
-  userName: string;
-  host: boolean;
-  hasGuessed: boolean;
-  kicksToOut: number;
-  kicksGot: Player[];
-  userAvatar?: string;
-  timestamp?: number;
-}
-
-interface Room {
-  id: string;
-  players: Player[];
-  messages: any[];
-  scoreBoard: any[];
-  useCustomWords: boolean;
-  customWords: string[];
-  whoGuessedIt: string[];
-  roomSettings: {
-    players: string;
-    language: string;
-    drawTime: string;
-    rounds: string;
-    wordCount: string;
-    hints: string;
-    private: boolean;
-  };
-}
+import { Player, Room, Message } from '@/types';
 
 export default function Page() {
   const params = useParams<{ id: string }>();
   const [message, setMessage] = useState('');
-  const [timeLeft, setTimeLeft] = useState(45); // Exemple de timer
-  const wordToGuess = "Chat"; // Exemple de mot à deviner
+  const [timeLeft, setTimeLeft] = useState(0); // Exemple de timer
   const canvasParentRef = useRef<HTMLDivElement | null>(null);
   const [tool, setTool] = useState<'pencil' | 'eraser'>('pencil'); // Outil actif
   const [strokeWidth, setStrokeWidth] = useState(4); // Épaisseur du trait
   const { socket } = useSocket();
   const [room, setRoom] = useState<Room | null>(null);
   const [me, setMe] = useState<Player | null>(null);
-
+  const [renderPlay, setRenderPlay] = useState(false);
+  const [wordList, setWordList] = useState<{ id: number, text: string }[]>([]);
+  const [isChoosingWord, setIsChoosingWord] = useState(false);
+  
   useEffect(() => {
-    console.log('Socket:', socket);
-    console.log('Room ID:', params.id);
     if (socket) {
       socket.on('send-room', (room: Room) => {
         setRoom(room);
@@ -84,6 +55,11 @@ export default function Page() {
     };
 
     p.mouseDragged = () => {
+
+      if (me?.id !== room?.currentDrawer?.id) {
+        return; // Bloque le dessin si ce n'est pas leur tour
+      }
+
       const x = p.mouseX;
       const y = p.mouseY;
       const px = p.pmouseX;
@@ -113,12 +89,17 @@ export default function Page() {
   };
 
   const clearCanvas = () => {
-    socket?.emit('clear'); // Émet un événement pour demander à tous de réinitialiser leur canvas
+    socket?.emit('clear-canvas'); // Émet un événement pour demander à tous de réinitialiser leur canvas
+    const canvasElement = document.querySelector('canvas');
+    if (canvasElement) {
+      const context = canvasElement.getContext('2d');
+      context?.clearRect(0, 0, canvasElement.width, canvasElement.height);
+    }
   };
 
   useEffect(() => {
     // Écoute des commandes pour réinitialiser le canvas
-    socket?.on('clear', () => {
+    socket?.on('clear-canvas', () => {
       const canvasElement = document.querySelector('canvas');
       if (canvasElement) {
         const context = canvasElement.getContext('2d');
@@ -141,12 +122,70 @@ export default function Page() {
     setRoom(room);
   });
 
+  socket?.on('game-started', ({ room }: { room: Room }) => {
+    setRenderPlay(true);
+    console.log('Game started:', room);
+    setRoom(room);
+  });
+
+  const isDrawing = (player: Player): boolean => {
+    return player.id === room?.currentDrawer?.id;
+  }
+
+  const handleStartGame = () => {
+    socket?.emit("start-game", { roomCode: room?.id });
+    playTurn();
+  }
+
+  const playTurn = () => {
+    getWordList();
+  };
+
+  socket?.on("send-word-list", ({ selectedWords }: { selectedWords: { id: number, text: string }[] }) => {
+    setWordList(selectedWords);
+    setIsChoosingWord(true);
+  });
+
+  const getWordList = () => {
+    socket?.emit("get-word-list", { roomCode: room.id });
+    setIsChoosingWord(true);
+  };
+
+  const chooseWord = (word: string) => {
+    socket?.emit("word-chosen", { roomCode: room.id, word });
+    setIsChoosingWord(false);
+  };
+
+  useEffect(() => {
+    socket?.on('start-timer', ({ room }: { room: Room }) => {
+      setRoom(room);
+      setTimeLeft(room.roomSettings.drawTime);
+  
+      const interval = setInterval(() => {
+        setTimeLeft((prev) => {
+          if (prev <= 1) {
+            clearInterval(interval);
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+
+    });
+  
+    return () => {
+      socket?.off('start-timer');
+    };
+  }, []);
+  
+
   return (
     <div className="flex flex-col min-h-screen w-full">
       {/* Barre du haut */}
       <div className="w-full bg-gray-800 text-white p-4 flex justify-between items-center">
         <div className="text-lg font-bold">Temps restant : {timeLeft}s</div>
-        <div className="text-lg font-semibold">Mot à deviner : {wordToGuess}</div>
+        <div className="text-lg font-semibold">Mot à deviner : {room?.currentWord}</div>
+        <div className="text-lg font-semibold">Manche {room?.currentRound} / {room?.roomSettings.rounds}</div>
       </div>
 
       {/* Contenu principal */}
@@ -155,42 +194,88 @@ export default function Page() {
         <div className="w-full md:w-1/4 p-4 bg-white shadow-md order-2 md:order-1">
           <h2 className="text-xl font-semibold mb-4">Joueurs</h2>
           <ul>
-            <li className="p-2 bg-blue-100 rounded-md mb-2">Joueur 1 (Dessine)</li>
-            <li className="p-2 bg-gray-100 rounded-md mb-2">Joueur 2</li>
-            <li className="p-2 bg-gray-100 rounded-md mb-2">Joueur 3</li>
+            {room?.players.map((player: Player) => (
+              <li
+                key={player.id}
+                className={`p-2 rounded-md mb-2 ${isDrawing(player) ? 'bg-blue-100' : 'bg-gray-100'}`}
+              >
+                <span className="mr-2">{player.userName} {me?.id === player.id ? '(Vous)' : ''}</span>
+                <span className="mr-2">
+                  {room?.scoreBoard.find((score: any) => score.playerId === player.id)?.score}
+                </span>
+                <span>{isDrawing(player) ? '(Dessine)' : ''}</span>
+              </li>
+            ))}
           </ul>
         </div>
-
         {/* Zone de dessin */}
         <div className="flex-1 p-4 flex flex-col items-center order-1 md:order-2">
+          {/* Bouton pour lancer la partie */}
+          {!renderPlay && (
+            <div className="w-full flex justify-center m-4">
+              <button
+                onClick={() => handleStartGame()}
+                className="bg-green-500 hover:bg-green-600 text-white px-6 py-2 rounded-md text-lg"
+              >
+                Lancer la partie
+              </button>
+            </div>
+          )}
+
+          {/* Choix du mot */}
+          {isChoosingWord && (
+            isDrawing(me!) ? (
+              <div className="w-full flex justify-center m-4">
+                {wordList.map((word) => (
+                  <button
+                    key={word.id}
+                    onClick={() => chooseWord(word.text)}
+                    className="bg-blue-500 hover:bg-blue-600 text-white px-6 py-2 rounded-md text-lg mr-4"
+                  >
+                    {word.text}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <div className="w-full flex justify-center m-4">
+                <div className="bg-blue-500 text-white px-6 py-2 rounded-md text-lg">
+                {room?.currentDrawer?.userName} is choosing a word
+                </div>
+              </div>
+            )
+          )}
+
+          {/* Canvas */}
           <div
             ref={canvasParentRef}
             className="w-full h-64 md:h-96 bg-white border border-gray-300 rounded-md mb-4"
           ></div>
 
           {/* Contrôles pour les outils */}
-          <div className="flex items-center space-x-2 md:space-x-4">
-            <button
-              onClick={() => setTool('pencil')}
-              className={`px-3 md:px-4 py-1 md:py-2 rounded-md ${tool === 'pencil' ? 'bg-blue-500 text-white' : 'bg-gray-200'
-                }`}
-            >
-              Crayon
-            </button>
-            <button
-              onClick={() => setTool('eraser')}
-              className={`px-3 md:px-4 py-1 md:py-2 rounded-md ${tool === 'eraser' ? 'bg-blue-500 text-white' : 'bg-gray-200'
-                }`}
-            >
-              Gomme
-            </button>
-            <button
-              onClick={clearCanvas}
-              className="bg-red-400 px-3 md:px-4 py-1 md:py-2 rounded-md text-white"
-            >
-              Réinitialiser
-            </button>
-          </div>
+          {renderPlay && isDrawing(me!) && (
+            <div className="flex items-center space-x-2 md:space-x-4">
+              <button
+                onClick={() => setTool('pencil')}
+                className={`px-3 md:px-4 py-1 md:py-2 rounded-md ${tool === 'pencil' ? 'bg-blue-500 text-white' : 'bg-gray-200'
+                  }`}
+              >
+                Crayon
+              </button>
+              <button
+                onClick={() => setTool('eraser')}
+                className={`px-3 md:px-4 py-1 md:py-2 rounded-md ${tool === 'eraser' ? 'bg-blue-500 text-white' : 'bg-gray-200'
+                  }`}
+              >
+                Gomme
+              </button>
+              <button
+                onClick={clearCanvas}
+                className="bg-red-400 px-3 md:px-4 py-1 md:py-2 rounded-md text-white"
+              >
+                Réinitialiser
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Chat */}
@@ -199,11 +284,13 @@ export default function Page() {
           <div className="flex-1 overflow-y-auto space-y-2">
             {/* Boucle à travers les messages dans room.messages */}
             {room?.messages
-              ?.filter((msg) => msg.timestamp >= (me?.timestamp ?? Infinity))
-              .map((msg, index) => (
-                <div key={index} className="bg-blue-100 p-2 rounded-md">
-                  {msg.text}
-                </div>
+              ?.filter((msg: Message) => msg.timestamp >= (me?.timestamp ?? Infinity) || msg.timestamp === 0)
+              .map((msg: Message, index: number) => (
+                !msg.isPrivate || msg.isPrivate && msg.senderId === socket?.id ? (
+                  <div key={index} className="bg-blue-100 p-2 rounded-md">
+                    {msg.text}
+                  </div>
+                ) : null
               ))}
           </div>
           <div className="mt-4 flex">
