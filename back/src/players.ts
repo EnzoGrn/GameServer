@@ -1,13 +1,13 @@
 // src/players.ts
 import { Room, Player } from "./types";
 
-export function addPlayerToRoom(room: Room, userId: string, userAvatar: string, userName: string, timestamp: number): Player {
+export function addPlayerToRoom(room: Room, userId: string, userAvatar: string, userName: string): Player {
   const newPlayer: Player = {
     id: userId,
     userAvatar,
     userName,
     host: false,
-    timestamp,
+    timestamp: Date.now(),
     kicksToOut: 0,
     kicksGot: [],
     hasGuessed: false,

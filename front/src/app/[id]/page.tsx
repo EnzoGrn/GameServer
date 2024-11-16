@@ -46,6 +46,7 @@ export default function Page() {
   const [strokeWidth, setStrokeWidth] = useState(4); // Épaisseur du trait
   const { socket } = useSocket();
   const [room, setRoom] = useState<Room | null>(null);
+  const [me, setMe] = useState<Player | null>(null);
 
   useEffect(() => {
     console.log('Socket:', socket);
@@ -53,6 +54,11 @@ export default function Page() {
     if (socket) {
       socket.on('send-room', (room: Room) => {
         setRoom(room);
+        for (let player of room.players) {
+          if (player.id === socket.id) {
+            setMe(player);
+          }
+        }
         console.log('Room:', room);
       });
       socket.emit('get-room', params.id);
@@ -192,11 +198,13 @@ export default function Page() {
           <h2 className="text-xl font-semibold mb-4">Chat</h2>
           <div className="flex-1 overflow-y-auto space-y-2">
             {/* Boucle à travers les messages dans room.messages */}
-            {room?.messages?.map((msg, index) => (
-              <div key={index} className="bg-blue-100 p-2 rounded-md">
-                {msg.text}
-              </div>
-            ))}
+            {room?.messages
+              ?.filter((msg) => msg.timestamp >= (me?.timestamp ?? Infinity))
+              .map((msg, index) => (
+                <div key={index} className="bg-blue-100 p-2 rounded-md">
+                  {msg.text}
+                </div>
+              ))}
           </div>
           <div className="mt-4 flex">
             <input

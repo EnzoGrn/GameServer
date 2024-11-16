@@ -3,13 +3,13 @@ import { Room, Player } from "./types";
 
 export const rooms: { [key: string]: Room } = {};
 
-export function createRoom(roomId: string, initialPlayer: Player): Room {
+export function createRoom(roomId: string, initialPlayer: Player, timestamp: number): Room {
   const newRoom: Room = {
     id: roomId,
     players: [initialPlayer],
     messages: [{
       text: `${initialPlayer.userName} is now the room owner!`,
-      timestamp: Date.now()
+      timestamp
     }],
     scoreBoard: [{
       playerId: initialPlayer.id,

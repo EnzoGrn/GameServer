@@ -68,7 +68,8 @@ export function setupSocket(io: Server) {
      * 
      * @returns {void} Cette fonction ne renvoie rien.
      */
-    socket.on("create-room", ({ roomId, userAvatar, userId, userName, timestamp }) => {
+    socket.on("create-room", ({ roomId, userAvatar, userId, userName }) => {
+      const roomTimestamp = Date.now();
       const initialPlayer: Player = {
         id: userId,
         userAvatar,
@@ -77,9 +78,9 @@ export function setupSocket(io: Server) {
         hasGuessed: false,
         kicksToOut: 0,
         kicksGot: [],
-        timestamp
+        timestamp: Date.now()
       };
-      const newRoom = createRoom(roomId, initialPlayer);
+      const newRoom = createRoom(roomId, initialPlayer, roomTimestamp);
 
       socket.join(roomId);
       io.to(roomId).emit("room-data-updated", { room: newRoom });
@@ -113,7 +114,7 @@ export function setupSocket(io: Server) {
      *  
      * @returns {void} Cette fonction ne renvoie rien.
      */
-    socket.on("join-room", ({ roomId, userAvatar, userId, userName, timestamp }) => {
+    socket.on("join-room", ({ roomId, userAvatar, userId, userName }) => {
       // Vérifier si la room existe
       const room = rooms[roomId];
       if (!room) {
@@ -122,8 +123,8 @@ export function setupSocket(io: Server) {
       }
 
       // Ajouter le joueur et le message de jointure
-      addPlayerToRoom(room, userId, userAvatar, userName, timestamp);
       addJoinMessage(room, userName);
+      addPlayerToRoom(room, userId, userAvatar, userName );
 
       // Joindre la room avec Socket.io
       socket.join(roomId);
