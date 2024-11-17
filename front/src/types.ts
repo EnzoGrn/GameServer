@@ -20,13 +20,15 @@ export interface Room {
     currentWord: string;
     currentDrawer: Player;
     currentRound: number;
+    timeLeft: number;
+    gameStarted: boolean, // L'état de la partie
     roomSettings: {
-        players: string;
+        players: number;
         language: string;
-        drawTime: string;
-        rounds: string;
-        wordCount: string;
-        hints: string;
+        drawTime: number;
+        rounds: number;
+        wordCount: number;
+        hints: number;
         private: boolean;
         useCustomWords: boolean;
     };

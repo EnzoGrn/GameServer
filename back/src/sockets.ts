@@ -1,10 +1,14 @@
 // src/sockets.ts
 import { Server, Socket } from "socket.io";
 import { rooms, createRoom } from "./rooms";
-import { Player } from "./types";
+import { Player, Room } from "./types";
 import { addPlayerToRoom } from "./players";
 import { addJoinMessage, addStartGameConditionMessage, addChangeHostMessage, addDisconnectMessage, checkMessage } from "./messages";
 import { selectWords } from "./words";
+
+function calculateWinner(room: Room) {
+  return room.scoreBoard.reduce((prev, current) => (prev.score > current.score ? prev : current));
+}
 
 export function setupSocket(io: Server) {
   io.on("connection", (socket: Socket) => {
@@ -14,19 +18,19 @@ export function setupSocket(io: Server) {
      * @function
      * @name socket.on("get-all-rooms")
      * @description
-     * Cette fonction écoute l'événement "get-all-rooms" émis par le client. Lorsqu'il est reçu, 
+     * Cette fonction écoute l'événement "get-all-rooms" émis par le client. Lorsqu'il est reçu,
      * elle déclenche l'émission de l'événement "send-all-rooms" qui contient la liste actuelle des rooms.
      *
      * @event
      * @name get-all-rooms
      * @description
-     * L'événement "get-all-rooms" est émis par le client pour demander les données des rooms 
+     * L'événement "get-all-rooms" est émis par le client pour demander les données des rooms
      * disponibles à l'instant.
-     * 
+     *
      * @event
      * @name send-all-rooms
      * @description
-     * L'événement "send-all-rooms" est émis en réponse à "get-all-rooms" et contient la liste actuelle des rooms 
+     * L'événement "send-all-rooms" est émis en réponse à "get-all-rooms" et contient la liste actuelle des rooms
      * disponibles. Il est envoyé au client afin de mettre à jour l'interface utilisateur.
      *
      * @returns {void} Cette fonction ne renvoie rien.
@@ -46,19 +50,19 @@ export function setupSocket(io: Server) {
      * Cette fonction écoute l'événement "create-room" émis par le client. Lorsqu'il est reçu,
      * elle crée une nouvelle room avec les données reçues et émet l'événement "room-data-updated"
      * pour informer les autres clients de la mise à jour.
-     * 
+     *
      * @event
      * @name create-room
      * @description
      * L'événement "create-room" est émis par le client pour créer une nouvelle room avec les données
      * fournies (roomId, userAvatar, userId, host, userName, timestamp).
-     * 
+     *
      * @event
      * @name room-data-updated
      * @description
      * L'événement "room-data-updated" est émis pour informer les clients de la mise à jour des données
      * de la room spécifiée.
-     * 
+     *
      * @param {Object} data Les données de la room à créer.
      * @param {string} data.roomId L'identifiant de la room.
      * @param {string} data.userAvatar L'avatar de l'utilisateur.
@@ -66,7 +70,7 @@ export function setupSocket(io: Server) {
      * @param {boolean} data.host Indique si l'utilisateur est l'hôte de la room.
      * @param {string} data.userName Le nom de l'utilisateur.
      * @param {number} data.timestamp Le timestamp de la connexion de l'utilisateur.
-     * 
+     *
      * @returns {void} Cette fonction ne renvoie rien.
      */
     socket.on("create-room", ({ roomId, userAvatar, userId, userName }) => {
@@ -94,25 +98,25 @@ export function setupSocket(io: Server) {
      * Cette fonction écoute l'événement "join-room" émis par le client. Lorsqu'il est reçu,
      * elle ajoute l'utilisateur à la room spécifiée et émet l'événement "user-is-joined" pour
      * informer les autres clients de la connexion de l'utilisateur.
-     * 
+     *
      * @event
      * @name join-room
      * @description
      * L'événement "join-room" est émis par le client pour rejoindre une room spécifique.
-     *  
+     *
      * @event
      * @name user-is-joined
      * @description
      * L'événement "user-is-joined" est émis pour informer les clients de la connexion d'un nouvel utilisateur
      * à la room spécifiée.
-     * 
+     *
      * @param {Object} data Les données de la room à rejoindre.
      * @param {string} data.roomId L'identifiant de la room.
      * @param {string} data.userAvatar L'avatar de l'utilisateur.
      * @param {string} data.userId L'identifiant de l'utilisateur.
      * @param {string} data.userName Le nom de l'utilisateur.
      * @param {number} data.timestamp Le timestamp de la connexion de l'utilisateur.
-     *  
+     *
      * @returns {void} Cette fonction ne renvoie rien.
      */
     socket.on("join-room", ({ roomId, userAvatar, userId, userName }) => {
@@ -141,12 +145,12 @@ export function setupSocket(io: Server) {
      * Cette fonction écoute l'événement "disconnect" émis par le client. Lorsqu'il est reçu,
      * elle gère la déconnexion de l'utilisateur en supprimant l'utilisateur de la room et en
      * informant les autres clients de la déconnexion.
-     * 
+     *
      * @event
      * @name disconnect
      * @description
      * L'événement "disconnect" est émis par le client lorsqu'il se déconnecte du serveur.
-     * 
+     *
      * @returns {void} Cette fonction ne renvoie rien.
      */
     socket.on("disconnect", () => {
@@ -191,12 +195,12 @@ export function setupSocket(io: Server) {
      * Cette fonction écoute l'événement "leave" émis par le client. Lorsqu'il est reçu,
      * elle gère la sortie de l'utilisateur de la room en supprimant l'utilisateur de la room
      * et en informant les autres clients de la sortie de l'utilisateur.
-     * 
+     *
      * @event
      * @name leave
      * @description
      * L'événement "leave" est émis par le client pour quitter la room actuelle.
-     * 
+     *
      * @returns {void} Cette fonction ne renvoie rien.
      */
     socket.on("leave", ({ roomCode, mySelf }) => {
@@ -257,19 +261,15 @@ export function setupSocket(io: Server) {
 
     socket.on("start-game", ({ roomCode }) => {
       const room = rooms[roomCode];
-
       if (!room || room.players.length < 2) {
         addStartGameConditionMessage(room);
-        io.to(roomCode).emit("room-data-updated", { room: rooms[roomCode] });
+        io.to(roomCode).emit("room-data-updated", { room });
         return;
       }
-
-      // Choisir le dernier joueur de la liste comme dessinateur
+      room.gameStarted = true;
       room.currentDrawer = room.players[room.players.length - 1];
       room.currentRound = 1;
-
-      // Informer tous les clients que le jeu a commencé
-      io.to(roomCode).emit("game-started", { room: rooms[roomCode] });
+      io.to(roomCode).emit("game-started", { room });
     });
 
     socket.on("message-sent", ({ roomCode, message }) => {
@@ -288,7 +288,7 @@ export function setupSocket(io: Server) {
       if (!room) {
         return console.error("Room not found:", roomCode);
       }
-    
+
       const selectedWords = selectWords(room);
       io.to(roomCode).emit("send-word-list", { selectedWords });
     });
@@ -298,9 +298,51 @@ export function setupSocket(io: Server) {
       if (!room) {
         return console.error("Room not found:", roomCode);
       }
-    
+
       room.currentWord = word;
       io.to(roomCode).emit('start-timer', { room });
+    });
+
+    socket.on("end-turn", ({ roomCode }) => {
+      console.log("Ending turn for room:", roomCode);
+      const room = rooms[roomCode];
+      if (!room) {
+        console.error("Room not found:", roomCode);
+        return;
+      }
+
+      const currentIndex = room.players.findIndex(p => p.id === room.currentDrawer.id);
+      const nextIndex = (currentIndex + 1) % room.players.length;
+      room.currentDrawer = room.players[nextIndex];
+
+      // Incrémenter le round si on revient au premier joueur
+      if (nextIndex === room.players.length - 1) {
+        room.currentRound++;
+      }
+
+      // Vérification de fin de partie
+      if (room.currentRound > room.roomSettings.rounds) {
+        console.log("Game ended");
+        io.to(roomCode).emit("game-ended", { winner: calculateWinner(room) });
+      } else {
+        room.timeLeft = room.roomSettings.drawTime; // Réinitialiser le timer
+        io.to(roomCode).emit("next-turn", { room });
+      }
+    });
+
+    socket.on("game-ended", ({ roomCode }) => {
+      const room = rooms[roomCode];
+      if (!room) return;
+
+      room.gameStarted = false;
+      room.currentRound = 0;
+      room.currentDrawer = null;
+      room.timeLeft = 0;
+      room.currentWord = "";
+
+      // Informer les clients
+      console.log("Game ended for room:", roomCode);
+      io.to(roomCode).emit("room-data-updated", { room });
     });
   });
 }

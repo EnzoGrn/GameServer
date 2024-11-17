@@ -137,6 +137,8 @@ export default function Home()
           userName  : name,
           timestamp : Date.now()
         };
+
+        // TODO: Check if the room exists, if not, create it
   
         socket.emit("join-room", data);
 

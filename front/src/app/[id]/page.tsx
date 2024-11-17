@@ -15,12 +15,12 @@ export default function Page() {
   const [tool, setTool] = useState<'pencil' | 'eraser'>('pencil'); // Outil actif
   const [strokeWidth, setStrokeWidth] = useState(4); // Épaisseur du trait
   const { socket } = useSocket();
-  const [room, setRoom] = useState<Room | null>(null);
+  const [thisRoom, setRoom] = useState<Room | null>(null);
   const [me, setMe] = useState<Player | null>(null);
   const [renderPlay, setRenderPlay] = useState(false);
   const [wordList, setWordList] = useState<{ id: number, text: string }[]>([]);
   const [isChoosingWord, setIsChoosingWord] = useState(false);
-  
+
   useEffect(() => {
     if (socket) {
       socket.on('send-room', (room: Room) => {
@@ -56,7 +56,7 @@ export default function Page() {
 
     p.mouseDragged = () => {
 
-      if (me?.id !== room?.currentDrawer?.id) {
+      if (me?.id !== thisRoom?.currentDrawer?.id) {
         return; // Bloque le dessin si ce n'est pas leur tour
       }
 
@@ -109,31 +109,30 @@ export default function Page() {
   }, [socket]);
 
   const SendChatMessage = () => {
-    // Envoi du message via Socket.IO
-    console.log('Message:', message);
-    console.log("room", room);
-    console.log('Room ID:', room?.id);
-    socket?.emit('message-sent', { roomCode: room?.id, message });
+    socket?.emit('message-sent', { roomCode: thisRoom?.id, message });
     setMessage('');
   }
 
   socket?.on('room-data-updated', ({ room }: { room: Room }) => {
-    console.log('Room updated:', room);
-    setRoom(room);
+    if (room) {
+      console.log('Room updated:', room);
+      setRoom(room);
+    } else {
+      console.error('Received null room data');
+    }
   });
 
   socket?.on('game-started', ({ room }: { room: Room }) => {
     setRenderPlay(true);
-    console.log('Game started:', room);
     setRoom(room);
   });
 
   const isDrawing = (player: Player): boolean => {
-    return player.id === room?.currentDrawer?.id;
+    return player.id === thisRoom?.currentDrawer?.id;
   }
 
   const handleStartGame = () => {
-    socket?.emit("start-game", { roomCode: room?.id });
+    socket?.emit("start-game", { roomCode: thisRoom?.id });
     playTurn();
   }
 
@@ -147,45 +146,73 @@ export default function Page() {
   });
 
   const getWordList = () => {
-    socket?.emit("get-word-list", { roomCode: room.id });
+    socket?.emit("get-word-list", { roomCode: thisRoom?.id });
     setIsChoosingWord(true);
   };
 
   const chooseWord = (word: string) => {
-    socket?.emit("word-chosen", { roomCode: room.id, word });
+    socket?.emit("word-chosen", { roomCode: thisRoom?.id, word });
     setIsChoosingWord(false);
   };
 
   useEffect(() => {
-    socket?.on('start-timer', ({ room }: { room: Room }) => {
-      setRoom(room);
-      setTimeLeft(room.roomSettings.drawTime);
-  
-      const interval = setInterval(() => {
-        setTimeLeft((prev) => {
-          if (prev <= 1) {
-            clearInterval(interval);
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
+    if (!socket) return;
 
-    });
-  
-    return () => {
-      socket?.off('start-timer');
+    const handleStartTimer = ({ room }: { room: Room }) => {
+      if (room) {
+        setRoom(room);
+        setIsChoosingWord(false);
+        setTimeLeft(room.roomSettings.drawTime);
+
+        let interval = setInterval(() => {
+          setTimeLeft((prev) => {
+            if (prev <= 1) {
+              clearInterval(interval); // Stop the interval
+              socket.emit('end-turn', { roomCode: room.id }); // Utilisez les données à jour
+              return 0;
+            }
+            return prev - 1;
+          });
+        }, 1000);
+      } else {
+        console.error('Received null room during start-timer');
+      }
     };
-  }, []);
-  
+
+    socket.on('start-timer', handleStartTimer);
+
+    return () => {
+      socket.off('start-timer', handleStartTimer);
+    };
+  }, [socket]);
+
+
+  useEffect(() => {
+    socket?.on("next-turn", ({ room }: { room: Room }) => {
+      console.log("next-turn", room.currentDrawer, room.currentRound, room.timeLeft);
+      setRoom((prevRoom) => prevRoom ? ({
+        ...prevRoom,
+        currentDrawer: room.currentDrawer,
+        currentRound: room.currentRound,
+        timeLeft: room.timeLeft,
+      }) : prevRoom);
+      setIsChoosingWord(true);
+      getWordList();
+    });
+
+    return () => {
+      socket?.off("next-turn");
+    };
+  }, [socket, thisRoom]);
+
 
   return (
     <div className="flex flex-col min-h-screen w-full">
       {/* Barre du haut */}
       <div className="w-full bg-gray-800 text-white p-4 flex justify-between items-center">
         <div className="text-lg font-bold">Temps restant : {timeLeft}s</div>
-        <div className="text-lg font-semibold">Mot à deviner : {room?.currentWord}</div>
-        <div className="text-lg font-semibold">Manche {room?.currentRound} / {room?.roomSettings.rounds}</div>
+        <div className="text-lg font-semibold">Mot à deviner : {thisRoom?.currentWord}</div>
+        <div className="text-lg font-semibold">Manche {thisRoom?.currentRound} / {thisRoom?.roomSettings.rounds}</div>
       </div>
 
       {/* Contenu principal */}
@@ -194,14 +221,14 @@ export default function Page() {
         <div className="w-full md:w-1/4 p-4 bg-white shadow-md order-2 md:order-1">
           <h2 className="text-xl font-semibold mb-4">Joueurs</h2>
           <ul>
-            {room?.players.map((player: Player) => (
+            {thisRoom?.players.map((player: Player) => (
               <li
                 key={player.id}
                 className={`p-2 rounded-md mb-2 ${isDrawing(player) ? 'bg-blue-100' : 'bg-gray-100'}`}
               >
                 <span className="mr-2">{player.userName} {me?.id === player.id ? '(Vous)' : ''}</span>
                 <span className="mr-2">
-                  {room?.scoreBoard.find((score: any) => score.playerId === player.id)?.score}
+                  {thisRoom?.scoreBoard.find((score: any) => score.playerId === player.id)?.score}
                 </span>
                 <span>{isDrawing(player) ? '(Dessine)' : ''}</span>
               </li>
@@ -239,7 +266,7 @@ export default function Page() {
             ) : (
               <div className="w-full flex justify-center m-4">
                 <div className="bg-blue-500 text-white px-6 py-2 rounded-md text-lg">
-                {room?.currentDrawer?.userName} is choosing a word
+                  {thisRoom?.currentDrawer?.userName} is choosing a word
                 </div>
               </div>
             )
@@ -283,7 +310,7 @@ export default function Page() {
           <h2 className="text-xl font-semibold mb-4">Chat</h2>
           <div className="flex-1 overflow-y-auto space-y-2">
             {/* Boucle à travers les messages dans room.messages */}
-            {room?.messages
+            {thisRoom?.messages
               ?.filter((msg: Message) => msg.timestamp >= (me?.timestamp ?? Infinity) || msg.timestamp === 0)
               .map((msg: Message, index: number) => (
                 !msg.isPrivate || msg.isPrivate && msg.senderId === socket?.id ? (
