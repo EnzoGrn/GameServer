@@ -10,6 +10,7 @@ import InvitationBox from '@/components/invitation/Invitation';
 // -- Librairies -- //
 import { useEffect, useRef, useState } from 'react';
 import { useSocket } from '@/components/provider/SocketProvider';
+import { useSafeEffect } from '@/lib/react/useSafeEffect';
 import { useParams } from 'next/navigation'
 import { Socket } from 'socket.io-client';
 import p5 from 'p5';
@@ -33,9 +34,14 @@ export default function Page()
     console.log('Invitation link: ', inviteLink);
   }, [params]);
 
+  // -- Canvas -- //
+
+  const canvasParentRef = useRef<HTMLDivElement | null>(null);
+
+  // -- State -- //
+
   const [message, setMessage] = useState('');
   const [timeLeft, setTimeLeft] = useState(0); // Exemple de timer
-  const canvasParentRef = useRef<HTMLDivElement | null>(null);
   const [tool, setTool] = useState<'pencil' | 'eraser'>('pencil'); // Outil actif
   const [strokeWidth, setStrokeWidth] = useState(4); // Épaisseur du trait
   const { socket } = useSocket();
@@ -45,7 +51,7 @@ export default function Page()
   const [wordList, setWordList] = useState<{ id: number, text: string }[]>([]);
   const [isChoosingWord, setIsChoosingWord] = useState(false);
 
-  useEffect(() => {
+  useSafeEffect(() => {
     if (socket) {
       socket.on('send-room', (room: Room) => {
         setRoom(room);
@@ -58,6 +64,7 @@ export default function Page()
       });
       socket.emit('get-room', params.id);
     }
+
     // Initialise p5.js
     if (canvasParentRef.current && socket) {
       new p5((p: p5) => sketch(p, socket), canvasParentRef.current);
@@ -66,16 +73,21 @@ export default function Page()
 
   const sketch = (p: p5, socket: Socket) => {
     p.setup = () => {
-      const canvas = p.createCanvas(600, 400);
-      canvas.parent(canvasParentRef.current!);
-      p.background(255);
+      if (canvasParentRef.current) {
+        const { width, height } = canvasParentRef.current.getBoundingClientRect();
+        const canvas            = p.createCanvas(width, height);
 
-      // Écoute des dessins des autres utilisateurs
-      socket.on('mouse', (data: MouseData) => {
-        p.stroke(data.color);
-        p.strokeWeight(data.strokeWidth);
-        p.line(data.x, data.y, data.px, data.py);
-      });
+        canvas.parent(canvasParentRef.current);
+
+        p.background(255);
+  
+        // Écoute des dessins des autres utilisateurs
+        socket.on('mouse', (data: MouseData) => {
+          p.stroke(data.color);
+          p.strokeWeight(data.strokeWidth);
+          p.line(data.x, data.y, data.px, data.py);
+        });
+      }
     };
 
     p.mouseDragged = () => {
@@ -113,10 +125,13 @@ export default function Page()
   };
 
   const clearCanvas = () => {
-    socket?.emit('clear-canvas'); // Émet un événement pour demander à tous de réinitialiser leur canvas
     const canvasElement = document.querySelector('canvas');
+
+    socket?.emit('clear-canvas');
+
     if (canvasElement) {
       const context = canvasElement.getContext('2d');
+
       context?.clearRect(0, 0, canvasElement.width, canvasElement.height);
     }
   };
@@ -210,7 +225,6 @@ export default function Page()
     };
   }, [socket]);
 
-
   useEffect(() => {
     socket?.on("next-turn", ({ room }: { room: Room }) => {
       console.log("next-turn", room.currentDrawer, room.currentRound, room.timeLeft);
@@ -283,10 +297,7 @@ export default function Page()
           )}
 
           {/* Canvas */}
-          <div
-            ref={canvasParentRef}
-            className="w-full h-64 md:h-96 bg-white border border-gray-300 rounded-md mb-4"
-          ></div>
+          <div ref={canvasParentRef} className="w-full h-64 md:h-96 bg-red-600 border border-gray-300 rounded-md mb-4" />
 
           {/* Contrôles pour les outils */}
           {renderPlay && isDrawing(me!) && (
@@ -347,6 +358,8 @@ export default function Page()
           </div>
         </div>
       </div>
+
+      {/* Footer with the invitation link */}
       <footer className="w-full flex justify-center">
         <InvitationBox invitationCode={inviteLink} />
       </footer>
