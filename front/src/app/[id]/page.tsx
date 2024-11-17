@@ -28,6 +28,7 @@ export default function Page() {
         for (let player of room.players) {
           if (player.id === socket.id) {
             setMe(player);
+            console.log('Me:', player);
           }
         }
         console.log('Room:', room);
@@ -132,6 +133,8 @@ export default function Page() {
   }
 
   const handleStartGame = () => {
+    if (me?.host == false) return;
+
     socket?.emit("start-game", { roomCode: thisRoom?.id });
     playTurn();
   }
@@ -186,6 +189,12 @@ export default function Page() {
     };
   }, [socket]);
 
+  useEffect(() => {
+    socket?.on("you-guessed", () => {
+      console.log("you-guessed", me);
+      socket?.emit("player-guessed", { roomCode: thisRoom?.id, playerId: me?.id });
+    });
+  }, [socket]);
 
   useEffect(() => {
     socket?.on("next-turn", ({ room }: { room: Room }) => {
@@ -204,7 +213,6 @@ export default function Page() {
       socket?.off("next-turn");
     };
   }, [socket, thisRoom]);
-
 
   return (
     <div className="flex flex-col min-h-screen w-full">
