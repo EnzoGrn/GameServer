@@ -1,6 +1,10 @@
 'use client';
 
 // -- Components -- //
+import Clock from '@/components/element/Clock';
+import WordDisplay, { GameState } from '@/components/element/WordDisplay';
+import Round from '@/components/element/Round';
+import InvitationBox from '@/components/invitation/Invitation';
 
 // -- Librairies -- //
 import { useEffect, useRef, useState } from 'react';
@@ -12,7 +16,6 @@ import p5 from 'p5';
 // -- Types -- //
 import { Player, Room, Message } from '@/lib/type/types';
 import { MouseData } from '@/lib/type/mouseData';
-import InvitationBox from '@/components/invitation/Invitation';
 
 export default function Page()
 {
@@ -225,14 +228,14 @@ export default function Page()
     };
   }, [socket, thisRoom]);
 
-
   return (
     <div className="flex flex-col min-h-screen w-full">
-      {/* Barre du haut */}
-      <div className="w-full bg-gray-800 text-white p-4 flex justify-between items-center">
-        <div className="text-lg font-bold">Temps restant : {timeLeft}s</div>
-        <div className="text-lg font-semibold">Mot à deviner : {thisRoom?.currentWord}</div>
-        <div className="text-lg font-semibold">Manche {thisRoom?.currentRound} / {thisRoom?.roomSettings.rounds}</div>
+
+      {/* Header */}
+      <div className="w-full bg-[#f37b78] text-white p-4 flex justify-between items-center border-b-2 border-b-[#c44b4a]">
+        <Clock time={timeLeft} />
+        <WordDisplay gameState='waiting' word={thisRoom?.currentWord.toLowerCase()} />
+        <Round currentRound={thisRoom?.currentRound} totalRounds={thisRoom?.roomSettings.rounds} /> 
       </div>
 
       {/* Contenu principal */}
