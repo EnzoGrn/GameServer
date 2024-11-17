@@ -21,6 +21,9 @@ import { MouseData } from '@/lib/type/mouseData';
 
 export default function Page()
 {
+  // -- The socket -- //
+  const { socket } = useSocket();
+
   // -- Get the room ID from the URL -- //
   const params = useParams<{ id: string }>();
   const [inviteLink, setInviteLink] = useState<string>('');
@@ -37,38 +40,31 @@ export default function Page()
   // -- Canvas -- //
 
   const canvasParentRef = useRef<HTMLDivElement | null>(null);
-
-  // -- State -- //
-
-  const [message, setMessage] = useState('');
-  const [timeLeft, setTimeLeft] = useState(0); // Exemple de timer
-  const [tool, setTool] = useState<'pencil' | 'eraser'>('pencil'); // Outil actif
-  const [strokeWidth, setStrokeWidth] = useState(4); // Épaisseur du trait
-  const { socket } = useSocket();
-  const [thisRoom, setRoom] = useState<Room | null>(null);
-  const [me, setMe] = useState<Player | undefined>(undefined);
-  const [renderPlay, setRenderPlay] = useState(false);
-  const [wordList, setWordList] = useState<{ id: number, text: string }[]>([]);
-  const [isChoosingWord, setIsChoosingWord] = useState(false);
+  const hiddenCanvasRef = useRef<HTMLDivElement | null>(null); // Hidden canvas for resizing the main canvas
+  const [p5Instance, setP5Instance] = useState<p5 | null>(null);
 
   useSafeEffect(() => {
     if (socket) {
       socket.on('send-room', (room: Room) => {
         setRoom(room);
+
         for (let player of room.players) {
-          if (player.id === socket.id) {
+          if (player.id === socket.id)
             setMe(player);
-          }
         }
+
         console.log('Room:', room);
       });
+
       socket.emit('get-room', params.id);
     }
 
-    // Initialise p5.js
-    if (canvasParentRef.current && socket) {
-      new p5((p: p5) => sketch(p, socket), canvasParentRef.current);
-    }
+    if (canvasParentRef.current && socket)
+      setP5Instance(new p5((p: p5) => sketch(p, socket), canvasParentRef.current));
+
+    return () => {
+      p5Instance?.remove();
+    };
   }, []);
 
   const sketch = (p: p5, socket: Socket) => {
@@ -78,8 +74,6 @@ export default function Page()
         const canvas            = p.createCanvas(width, height);
 
         canvas.parent(canvasParentRef.current);
-
-        p.background(255);
   
         // Écoute des dessins des autres utilisateurs
         socket.on('mouse', (data: MouseData) => {
@@ -91,13 +85,10 @@ export default function Page()
     };
 
     p.mouseDragged = () => {
-
-      if (me?.id !== thisRoom?.currentDrawer?.id) {
+      if (me?.id !== thisRoom?.currentDrawer?.id)
         return; // Bloque le dessin si ce n'est pas leur tour
-      }
-
-      const x = p.mouseX;
-      const y = p.mouseY;
+      const x  = p.mouseX;
+      const y  = p.mouseY;
       const px = p.pmouseX;
       const py = p.pmouseY;
 
@@ -124,6 +115,44 @@ export default function Page()
     };
   };
 
+  /*
+   * @brief Resize the canvas when the window is resized
+   */
+  useEffect(() => {
+    const resizeCanvas = () => {
+      if (hiddenCanvasRef.current) {
+        const { width, height } = hiddenCanvasRef.current.getBoundingClientRect();
+
+        if (p5Instance)
+          p5Instance.resizeCanvas(width, height); // !!! When the canvas is resized, it clears the canvas...
+      }
+    };
+
+    window.addEventListener('resize', resizeCanvas);
+
+    resizeCanvas();
+
+    return () => {
+      window.removeEventListener('resize', resizeCanvas);
+    };
+  }, [p5Instance]);
+
+  useEffect(() => {
+    socket?.on('clear-canvas', () => {
+      const canvasElement = document.querySelector('canvas');
+
+      if (canvasElement) {
+        const context = canvasElement.getContext('2d');
+
+        context?.clearRect(0, 0, canvasElement.width, canvasElement.height);
+      }
+    });
+
+    return () => {
+      socket?.off('clear-canvas');
+    };
+  }, [socket]);
+
   const clearCanvas = () => {
     const canvasElement = document.querySelector('canvas');
 
@@ -136,16 +165,22 @@ export default function Page()
     }
   };
 
-  useEffect(() => {
-    // Écoute des commandes pour réinitialiser le canvas
-    socket?.on('clear-canvas', () => {
-      const canvasElement = document.querySelector('canvas');
-      if (canvasElement) {
-        const context = canvasElement.getContext('2d');
-        context?.clearRect(0, 0, canvasElement.width, canvasElement.height);
-      }
-    });
-  }, [socket]);
+  // -- Game State -- //
+  const [gameState, setGameState] = useState<GameState>('waiting');
+
+  // -- Word List -- //
+  const [wordList      , setWordList]       = useState<{ id: number, text: string }[]>([]);
+  const [isChoosingWord, setIsChoosingWord] = useState<boolean>(false);
+
+  // -- State -- //
+
+  const [message, setMessage] = useState('');
+  const [timeLeft, setTimeLeft] = useState(0); // Exemple de timer
+  const [tool, setTool] = useState<'pencil' | 'eraser'>('pencil'); // Outil actif
+  const [strokeWidth, setStrokeWidth] = useState(4); // Épaisseur du trait
+  const [thisRoom, setRoom] = useState<Room | null>(null);
+  const [me, setMe] = useState<Player | undefined>(undefined);
+  const [renderPlay, setRenderPlay] = useState(false);
 
   const SendChatMessage = () => {
     socket?.emit('message-sent', { roomCode: thisRoom?.id, message });
@@ -182,16 +217,26 @@ export default function Page()
   socket?.on("send-word-list", ({ selectedWords }: { selectedWords: { id: number, text: string }[] }) => {
     setWordList(selectedWords);
     setIsChoosingWord(true);
+
+    if (me?.id === thisRoom?.currentDrawer?.id)
+      setGameState('choose');
+    else
+      setGameState('waiting');
   });
 
   const getWordList = () => {
     socket?.emit("get-word-list", { roomCode: thisRoom?.id });
+
     setIsChoosingWord(true);
   };
 
   const chooseWord = (word: string) => {
     socket?.emit("word-chosen", { roomCode: thisRoom?.id, word });
+
     setIsChoosingWord(false);
+
+    if (me?.id === thisRoom?.currentDrawer?.id)
+      setGameState('drawing');
   };
 
   useEffect(() => {
@@ -249,7 +294,7 @@ export default function Page()
       {/* Header */}
       <div className="w-full bg-[#f37b78] text-white p-4 flex justify-between items-center border-b-2 border-b-[#c44b4a]">
         <Clock time={timeLeft} />
-        <WordDisplay gameState='waiting' word={thisRoom?.currentWord.toLowerCase()} />
+        <WordDisplay gameState={gameState} word={thisRoom?.currentWord.toLowerCase()} />
         <Round currentRound={thisRoom?.currentRound} totalRounds={thisRoom?.roomSettings.rounds} /> 
       </div>
 
@@ -297,7 +342,10 @@ export default function Page()
           )}
 
           {/* Canvas */}
-          <div ref={canvasParentRef} className="w-full h-64 md:h-96 bg-red-600 border border-gray-300 rounded-md mb-4" />
+          <div className="relative w-full">
+            <div ref={canvasParentRef} className="absolute w-full h-64 md:h-96 bg-white border border-gray-300 rounded-md mb-4" />
+            <div ref={hiddenCanvasRef} className="relative top-0 left-0 w-full h-64 md:h-96 bg-transparent z-0" />
+          </div>
 
           {/* Contrôles pour les outils */}
           {renderPlay && isDrawing(me!) && (
