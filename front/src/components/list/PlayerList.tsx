@@ -6,7 +6,7 @@ import { Player } from "@/lib/type/types";
 
 const PlayerList = ({ players, me, drawer, scoreBoard } : { players?: Player[], me?: Player, drawer?: Player, scoreBoard?: any[] }) => {
   return (
-    <div className="w-full h-full md:w-1/6 p-4 order-2 md:order-1">
+    <div className="w-full h-full md:w-1/4 p-4 order-2 md:order-1">
       <ul>
         {players && players.map((player: Player, index: number) => (
           <li
