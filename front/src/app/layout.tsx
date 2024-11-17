@@ -29,7 +29,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
       </head>
       <body className={font.className}>
         <SocketProvider>
-          <div className={`w-100 h-screen flex justify-center items-center flex-col overflow-hidden bg-[url('assets/background.png')]`}>
+          <div className={`flex justify-center items-center flex-col overflow-hidden bg-[url('assets/background.png')]`}>
             {children}
           </div>
         </SocketProvider>

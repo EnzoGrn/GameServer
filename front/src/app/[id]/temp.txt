@@ -1,34 +1,14 @@
 'use client';
 
-// -- Components -- //
-
-// -- Librairies -- //
 import { useEffect, useRef, useState } from 'react';
+import p5 from 'p5';
+import { Socket } from 'socket.io-client';
 import { useSocket } from '@/components/provider/SocketProvider';
 import { useParams } from 'next/navigation'
-import { Socket } from 'socket.io-client';
-import p5 from 'p5';
-
-// -- Types -- //
 import { Player, Room, Message } from '@/lib/type/types';
-import { MouseData } from '@/lib/type/mouseData';
-import InvitationBox from '@/components/invitation/Invitation';
 
-export default function Page()
-{
-  // -- Get the room ID from the URL -- //
+export default function Page() {
   const params = useParams<{ id: string }>();
-  const [inviteLink, setInviteLink] = useState<string>('');
-
-  /*
-   * @brief Generate a invite link
-   */
-  useEffect(() => {
-    setInviteLink(`${window.location.origin}?code=${params.id}`);
-    
-    console.log('Invitation link: ', inviteLink);
-  }, [params]);
-
   const [message, setMessage] = useState('');
   const [timeLeft, setTimeLeft] = useState(0); // Exemple de timer
   const canvasParentRef = useRef<HTMLDivElement | null>(null);
@@ -48,7 +28,6 @@ export default function Page()
         for (let player of room.players) {
           if (player.id === socket.id) {
             setMe(player);
-            console.log('Me:', player);
           }
         }
         console.log('Room:', room);
@@ -153,8 +132,6 @@ export default function Page()
   }
 
   const handleStartGame = () => {
-    if (me?.host == false) return;
-
     socket?.emit("start-game", { roomCode: thisRoom?.id });
     playTurn();
   }
@@ -209,12 +186,6 @@ export default function Page()
     };
   }, [socket]);
 
-  useEffect(() => {
-    socket?.on("you-guessed", () => {
-      console.log("you-guessed", me);
-      socket?.emit("player-guessed", { roomCode: thisRoom?.id, playerId: me?.id });
-    });
-  }, [socket]);
 
   useEffect(() => {
     socket?.on("next-turn", ({ room }: { room: Room }) => {
@@ -233,6 +204,7 @@ export default function Page()
       socket?.off("next-turn");
     };
   }, [socket, thisRoom]);
+
 
   return (
     <div className="flex flex-col min-h-screen w-full">
@@ -365,9 +337,16 @@ export default function Page()
           </div>
         </div>
       </div>
-      <footer className="w-full flex justify-center">
-        <InvitationBox invitationCode={inviteLink} />
-      </footer>
     </div>
   );
+}
+
+// Interface pour les données envoyées via Socket.IO
+interface MouseData {
+  x: number;
+  y: number;
+  px: number;
+  py: number;
+  color: string;
+  strokeWidth: number;
 }
