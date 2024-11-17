@@ -69,7 +69,7 @@ export function checkMessage(room: Room, player: any, message: string): boolean{
     addGuessedMessage(room, player.userName);
     return true;
   } else {
-    if (!player.hasGuessed && player.id !== room?.currentDrawer.id) {
+    if (!player.hasGuessed && player.id !== room?.currentDrawer?.id) {
       const distance = levenshteinDistance(message, room?.currentWord);
 
       if (distance < 2) {

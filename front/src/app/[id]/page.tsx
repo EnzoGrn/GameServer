@@ -28,7 +28,7 @@ export default function Page()
    */
   useEffect(() => {
     setInviteLink(`${window.location.origin}?code=${params.id}`);
-    
+
     console.log('Invitation link: ', inviteLink);
   }, [params]);
 
@@ -80,7 +80,7 @@ export default function Page()
 
     p.mouseDragged = () => {
 
-      if (me?.id !== thisRoom?.currentDrawer?.id) {
+      if (socket?.id !== thisRoom?.currentDrawer?.id) {
         return; // Bloque le dessin si ce n'est pas leur tour
       }
 
@@ -192,7 +192,9 @@ export default function Page()
 
         let interval = setInterval(() => {
           setTimeLeft((prev) => {
-            if (prev <= 1) {
+            console.log('Time left:', prev);
+            console.log('Guessed players:', room.guessedPlayers.length);
+            if (prev <= 1 || room.guessedPlayers.length === room.players.length - 1) {
               clearInterval(interval); // Stop the interval
               socket.emit('end-turn', { roomCode: room.id }); // Utilisez les données à jour
               return 0;
@@ -213,9 +215,10 @@ export default function Page()
   }, [socket]);
 
   useEffect(() => {
-    socket?.on("you-guessed", () => {
-      console.log("you-guessed", me);
-      socket?.emit("player-guessed", { roomCode: thisRoom?.id, playerId: me?.id });
+    socket?.on("you-guessed", ({ room }: { room: Room }) => {
+      setRoom(room);
+      console.log("you-guessed", socket?.id);
+      socket?.emit("player-guessed", { roomCode: room?.id, playerId: socket?.id });
     });
   }, [socket]);
 
@@ -244,7 +247,7 @@ export default function Page()
       <div className="w-full bg-[#f37b78] text-white p-4 flex justify-between items-center border-b-2 border-b-[#c44b4a]">
         <Clock time={timeLeft} />
         <WordDisplay gameState='waiting' word={thisRoom?.currentWord.toLowerCase()} />
-        <Round currentRound={thisRoom?.currentRound} totalRounds={thisRoom?.roomSettings.rounds} /> 
+        <Round currentRound={thisRoom?.currentRound} totalRounds={thisRoom?.roomSettings.rounds} />
       </div>
 
       {/* Contenu principal */}
@@ -258,7 +261,7 @@ export default function Page()
                 key={player.id}
                 className={`p-2 rounded-md mb-2 ${isDrawing(player) ? 'bg-blue-100' : 'bg-gray-100'}`}
               >
-                <span className="mr-2">{player.userName} {me?.id === player.id ? '(Vous)' : ''}</span>
+                <span className="mr-2">{player.userName} {socket?.id === player.id ? '(Vous)' : ''}</span>
                 <span className="mr-2">
                   {thisRoom?.scoreBoard.find((score: any) => score.playerId === player.id)?.score}
                 </span>

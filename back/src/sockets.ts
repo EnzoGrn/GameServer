@@ -278,7 +278,7 @@ export function setupSocket(io: Server) {
       const player = room?.players?.find((player) => player.id === socket.id);
       if (room && player) {
         if (checkMessage(room, player, message)) {
-          socket.emit("you-guessed");
+          socket.emit("you-guessed", { room });
         }
 
         io.to(roomCode).emit("room-data-updated", { room });
@@ -322,7 +322,7 @@ export function setupSocket(io: Server) {
       console.log("Next drawer:", room.currentDrawer.userName);
 
       // Incrémenter le round si on revient au premier joueur
-      if (nextIndex === room.players.length - 1) {
+      if (currentIndex === room.players.length - 1) {
         room.currentRound++;
       }
 
@@ -344,7 +344,6 @@ export function setupSocket(io: Server) {
     });
 
     socket.on('player-guessed', ({ roomCode, playerId }) => {
-      console.log("Player guessed:", playerId);
       const room = rooms[roomCode];
       if (!room) return;
 
@@ -354,23 +353,23 @@ export function setupSocket(io: Server) {
 
       if (room.guessedPlayers.length === room.players.length - 1) {
         console.log("All players guessed the word!");
-        socket.emit("end-turn", { roomCode });
+        socket.emit("end-turn-no-timer", { room });
       }
     });
 
-    socket.on("game-ended", ({ roomCode }) => {
-      const room = rooms[roomCode];
-      if (!room) return;
+    // socket.on("game-ended", ({ roomCode }) => {
+    //   const room = rooms[roomCode];
+    //   if (!room) return;
 
-      room.gameStarted = false;
-      room.currentRound = 0;
-      room.currentDrawer = null;
-      room.timeLeft = 0;
-      room.currentWord = "";
-      room.guessedPlayers = [];
+    //   room.gameStarted = false;
+    //   room.currentRound = 0;
+    //   room.currentDrawer = null;
+    //   room.timeLeft = 0;
+    //   room.currentWord = "";
+    //   room.guessedPlayers = [];
 
-      console.log("Game ended for room:", roomCode);
-      io.to(roomCode).emit("room-data-updated", { room });
-    });
+    //   console.log("Game ended for room:", roomCode);
+    //   io.to(roomCode).emit("room-data-updated", { room });
+    // });
   });
 }
