@@ -50,7 +50,7 @@ export default function Page()
 
         for (let player of room.players) {
           if (player.id === socket.id) {
-           setMe(player);
+            setMe(player);
 
             console.log('Me:', player);
           }
@@ -60,6 +60,10 @@ export default function Page()
       });
 
       socket.emit('get-room', params.id);
+
+      return () => {
+        socket.off('send-room');
+      };
     }
 
     if (canvasParentRef.current && socket)
@@ -168,6 +172,9 @@ export default function Page()
     }
   };
 
+  // -- My profile -- //
+  const [me, setMe] = useState<Player | undefined>(undefined);
+
   // -- Game State -- //
   const [gameState, setGameState] = useState<GameState>('waiting');
 
@@ -182,7 +189,6 @@ export default function Page()
   const [tool, setTool] = useState<'pencil' | 'eraser'>('pencil'); // Outil actif
   const [strokeWidth, setStrokeWidth] = useState(4); // Épaisseur du trait
   const [thisRoom, setRoom] = useState<Room | null>(null);
-  const [me, setMe] = useState<Player | undefined>(undefined);
   const [renderPlay, setRenderPlay] = useState(false);
 
   const SendChatMessage = () => {
@@ -212,6 +218,7 @@ export default function Page()
     if (me?.host == false) return;
 
     socket?.emit("start-game", { roomCode: thisRoom?.id });
+
     playTurn();
   }
 
@@ -239,9 +246,6 @@ export default function Page()
     socket?.emit("word-chosen", { roomCode: thisRoom?.id, word });
 
     setIsChoosingWord(false);
-
-    if (me?.id === thisRoom?.currentDrawer?.id)
-      setGameState('drawing');
   };
 
   useEffect(() => {
@@ -253,11 +257,17 @@ export default function Page()
         setIsChoosingWord(false);
         setTimeLeft(room.roomSettings.drawTime);
 
-        let interval = setInterval(() => {
+        if (me?.id === thisRoom?.currentDrawer?.id)
+          setGameState('drawing');
+        else
+          setGameState('guessing');
+
+          let interval = setInterval(() => {
           setTimeLeft((prev) => {
             console.log('Time left:', prev);
-            console.log('Guessed players:', room.guessedPlayers.length);
-            if (prev <= 1 || room.guessedPlayers.length === room.players.length - 1) {
+            console.log('Guessed players:', room?.guessedPlayers?.length);
+
+            if (prev <= 1 || room?.guessedPlayers?.length === room.players.length - 1) {
               clearInterval(interval); // Stop the interval
               socket.emit('end-turn', { roomCode: room.id }); // Utilisez les données à jour
               return 0;
@@ -275,7 +285,7 @@ export default function Page()
     return () => {
       socket.off('start-timer', handleStartTimer);
     };
-  }, [socket]);
+  }, [socket, me]);
 
   useEffect(() => {
     socket?.on("you-guessed", ({ room }: { room: Room }) => {
