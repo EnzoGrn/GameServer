@@ -5,7 +5,7 @@ import p5 from 'p5';
 import { Socket } from 'socket.io-client';
 import { useSocket } from '@/components/provider/SocketProvider';
 import { useParams } from 'next/navigation'
-import { Player, Room, Message } from '@/types';
+import { Player, Room, Message } from '@/lib/type/types';
 
 export default function Page() {
   const params = useParams<{ id: string }>();

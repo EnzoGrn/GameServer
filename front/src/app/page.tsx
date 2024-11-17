@@ -11,7 +11,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import Random from '@/lib/random/string';
 
 // -- Types -- //
-import { Room } from '@/types';
+import { Room } from '@/lib/type/types';
 
 export default function Home()
 {
