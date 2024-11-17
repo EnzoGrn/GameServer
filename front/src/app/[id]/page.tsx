@@ -257,7 +257,9 @@ export default function Page()
         setIsChoosingWord(false);
         setTimeLeft(room.roomSettings.drawTime);
 
-        if (me?.id === thisRoom?.currentDrawer?.id)
+        console.log("Drawer:", room.currentDrawer);
+
+        if (me?.id === room?.currentDrawer?.id)
           setGameState('drawing');
         else
           setGameState('guessing');
@@ -319,7 +321,7 @@ export default function Page()
       {/* Header */}
       <div className="w-full bg-[#f37b78] text-white p-4 flex justify-between items-center border-b-2 border-b-[#c44b4a]">
         <Clock time={timeLeft} />
-        <WordDisplay gameState={gameState} word={thisRoom?.currentWord.toLowerCase()} />
+        <WordDisplay gameState={gameState} word={thisRoom?.currentWord.toLowerCase()} guessedPlayers={thisRoom?.guessedPlayers} />
         <Round currentRound={thisRoom?.currentRound} totalRounds={thisRoom?.roomSettings.rounds} /> 
       </div>
 
