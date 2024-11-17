@@ -4,6 +4,7 @@
 import Clock from '@/components/element/Clock';
 import WordDisplay, { GameState } from '@/components/element/WordDisplay';
 import Round from '@/components/element/Round';
+import PlayerList from '@/components/list/PlayerList';
 import InvitationBox from '@/components/invitation/Invitation';
 
 // -- Librairies -- //
@@ -39,7 +40,7 @@ export default function Page()
   const [strokeWidth, setStrokeWidth] = useState(4); // Épaisseur du trait
   const { socket } = useSocket();
   const [thisRoom, setRoom] = useState<Room | null>(null);
-  const [me, setMe] = useState<Player | null>(null);
+  const [me, setMe] = useState<Player | undefined>(undefined);
   const [renderPlay, setRenderPlay] = useState(false);
   const [wordList, setWordList] = useState<{ id: number, text: string }[]>([]);
   const [isChoosingWord, setIsChoosingWord] = useState(false);
@@ -250,26 +251,12 @@ export default function Page()
         <Round currentRound={thisRoom?.currentRound} totalRounds={thisRoom?.roomSettings.rounds} />
       </div>
 
-      {/* Contenu principal */}
+      {/* Main Section */}
       <div className="flex flex-col md:flex-row flex-grow">
+
         {/* Liste des joueurs */}
-        <div className="w-full md:w-1/4 p-4 bg-white shadow-md order-2 md:order-1">
-          <h2 className="text-xl font-semibold mb-4">Joueurs</h2>
-          <ul>
-            {thisRoom?.players.map((player: Player) => (
-              <li
-                key={player.id}
-                className={`p-2 rounded-md mb-2 ${isDrawing(player) ? 'bg-blue-100' : 'bg-gray-100'}`}
-              >
-                <span className="mr-2">{player.userName} {socket?.id === player.id ? '(Vous)' : ''}</span>
-                <span className="mr-2">
-                  {thisRoom?.scoreBoard.find((score: any) => score.playerId === player.id)?.score}
-                </span>
-                <span>{isDrawing(player) ? '(Dessine)' : ''}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
+        <PlayerList players={thisRoom?.players} me={me} drawer={thisRoom?.currentDrawer} scoreBoard={thisRoom?.scoreBoard} />
+
         {/* Zone de dessin */}
         <div className="flex-1 p-4 flex flex-col items-center order-1 md:order-2">
           {/* Bouton pour lancer la partie */}

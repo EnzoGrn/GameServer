@@ -178,7 +178,7 @@ export default function Home()
         <div className="w-full flex flex-row justify-between items-center gap-2">
           <LabelBlock blockName="Player Name">
             <input
-              type="text" value={playerName} onChange={(e) => OnPlayerNameChange(e.target.value)}
+              type="text" value={playerName} onChange={(e) => OnPlayerNameChange(e.target.value)} maxLength={15}
               placeholder="Enter your name" className="w-full p-2 mb-4 border border-gray-300 rounded-md"
             />
           </LabelBlock>
