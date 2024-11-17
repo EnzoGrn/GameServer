@@ -139,7 +139,7 @@ export default function Home()
         };
 
         // TODO: Check if the room exists, if not, create it
-  
+
         socket.emit("join-room", data);
 
         console.log(name + " is joining the room " + roomId);
