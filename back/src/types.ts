@@ -16,7 +16,7 @@ export interface Room {
     messages: any[];
     scoreBoard: any[];
     customWords: string[];
-    whoGuessedIt: string[];
+    guessedPlayers: Player[];
     currentWord: string;
     currentDrawer: Player;
     currentRound: number;

@@ -33,7 +33,7 @@ export default function Page()
    */
   useEffect(() => {
     setInviteLink(`${window.location.origin}?code=${params.id}`);
-    
+
     console.log('Invitation link: ', inviteLink);
   }, [params]);
 
@@ -49,8 +49,11 @@ export default function Page()
         setRoom(room);
 
         for (let player of room.players) {
-          if (player.id === socket.id)
-            setMe(player);
+          if (player.id === socket.id) {
+           setMe(player);
+
+            console.log('Me:', player);
+          }
         }
 
         console.log('Room:', room);
@@ -85,7 +88,7 @@ export default function Page()
     };
 
     p.mouseDragged = () => {
-      if (me?.id !== thisRoom?.currentDrawer?.id)
+      if (socket?.id !== thisRoom?.currentDrawer?.id)
         return; // Bloque le dessin si ce n'est pas leur tour
       const x  = p.mouseX;
       const y  = p.mouseY;
@@ -206,6 +209,8 @@ export default function Page()
   }
 
   const handleStartGame = () => {
+    if (me?.host == false) return;
+
     socket?.emit("start-game", { roomCode: thisRoom?.id });
     playTurn();
   }
@@ -250,7 +255,9 @@ export default function Page()
 
         let interval = setInterval(() => {
           setTimeLeft((prev) => {
-            if (prev <= 1) {
+            console.log('Time left:', prev);
+            console.log('Guessed players:', room.guessedPlayers.length);
+            if (prev <= 1 || room.guessedPlayers.length === room.players.length - 1) {
               clearInterval(interval); // Stop the interval
               socket.emit('end-turn', { roomCode: room.id }); // Utilisez les données à jour
               return 0;
@@ -268,6 +275,14 @@ export default function Page()
     return () => {
       socket.off('start-timer', handleStartTimer);
     };
+  }, [socket]);
+
+  useEffect(() => {
+    socket?.on("you-guessed", ({ room }: { room: Room }) => {
+      setRoom(room);
+      console.log("you-guessed", socket?.id);
+      socket?.emit("player-guessed", { roomCode: room?.id, playerId: socket?.id });
+    });
   }, [socket]);
 
   useEffect(() => {

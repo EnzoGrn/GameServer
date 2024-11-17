@@ -277,7 +277,10 @@ export function setupSocket(io: Server) {
       const room = rooms[roomCode];
       const player = room?.players?.find((player) => player.id === socket.id);
       if (room && player) {
-        checkMessage(room, player, message);
+        if (checkMessage(room, player, message)) {
+          socket.emit("you-guessed", { room });
+        }
+
         io.to(roomCode).emit("room-data-updated", { room });
       }
     });
@@ -312,13 +315,18 @@ export function setupSocket(io: Server) {
       }
 
       const currentIndex = room.players.findIndex(p => p.id === room.currentDrawer.id);
+      console.log("Current index:", currentIndex);
       const nextIndex = (currentIndex + 1) % room.players.length;
+      console.log("Next index:", nextIndex);
       room.currentDrawer = room.players[nextIndex];
+      console.log("Next drawer:", room.currentDrawer.userName);
 
       // Incrémenter le round si on revient au premier joueur
-      if (nextIndex === room.players.length - 1) {
+      if (currentIndex === room.players.length - 1) {
         room.currentRound++;
       }
+
+      console.log("Current round:", room.currentRound);
 
       // Vérification de fin de partie
       if (room.currentRound > room.roomSettings.rounds) {
@@ -326,23 +334,42 @@ export function setupSocket(io: Server) {
         io.to(roomCode).emit("game-ended", { winner: calculateWinner(room) });
       } else {
         room.timeLeft = room.roomSettings.drawTime; // Réinitialiser le timer
+        room.guessedPlayers = []; // Réinitialiser les joueurs ayant trouvé le mot
+        for (let player of room.players) {
+          player.hasGuessed = false;
+        }
+
         io.to(roomCode).emit("next-turn", { room });
       }
     });
 
-    socket.on("game-ended", ({ roomCode }) => {
+    socket.on('player-guessed', ({ roomCode, playerId }) => {
       const room = rooms[roomCode];
       if (!room) return;
 
-      room.gameStarted = false;
-      room.currentRound = 0;
-      room.currentDrawer = null;
-      room.timeLeft = 0;
-      room.currentWord = "";
+      if (!room.guessedPlayers.includes(playerId)) {
+        room.guessedPlayers.push(playerId);
+      }
 
-      // Informer les clients
-      console.log("Game ended for room:", roomCode);
-      io.to(roomCode).emit("room-data-updated", { room });
+      if (room.guessedPlayers.length === room.players.length - 1) {
+        console.log("All players guessed the word!");
+        socket.emit("end-turn-no-timer", { room });
+      }
     });
+
+    // socket.on("game-ended", ({ roomCode }) => {
+    //   const room = rooms[roomCode];
+    //   if (!room) return;
+
+    //   room.gameStarted = false;
+    //   room.currentRound = 0;
+    //   room.currentDrawer = null;
+    //   room.timeLeft = 0;
+    //   room.currentWord = "";
+    //   room.guessedPlayers = [];
+
+    //   console.log("Game ended for room:", roomCode);
+    //   io.to(roomCode).emit("room-data-updated", { room });
+    // });
   });
 }

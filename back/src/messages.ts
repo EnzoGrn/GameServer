@@ -62,13 +62,14 @@ export function addChangeHostMessage(room: Room, userName: string) {
   room?.messages?.push(changeHostMessage);
 }
 
-export function checkMessage(room: Room, player: any, message: string) {
+export function checkMessage(room: Room, player: any, message: string): boolean{
   if (message === room?.currentWord && !player.hasGuessed && player.id !== room?.currentDrawer.id) {
-    room?.whoGuessedIt.push(player.userName);
+    room?.guessedPlayers.push(player.userName);
     player.hasGuessed = true;
     addGuessedMessage(room, player.userName);
+    return true;
   } else {
-    if (!player.hasGuessed && player.id !== room?.currentDrawer.id) {
+    if (!player.hasGuessed && player.id !== room?.currentDrawer?.id) {
       const distance = levenshteinDistance(message, room?.currentWord);
 
       if (distance < 2) {
@@ -85,4 +86,5 @@ export function checkMessage(room: Room, player: any, message: string) {
       addMessage(room, player.userName, message);
     }
   }
+  return false;
 }
