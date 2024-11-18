@@ -270,7 +270,6 @@ export function setupSocket(io: Server) {
       room.currentDrawer = room.players[room.players.length - 1];
       room.currentDrawerIndex = room.players.length - 1;
       room.currentRound = 1;
-      // io.to(roomCode).emit("game-started", { room });
       startTurn(roomCode);
     });
 
@@ -288,7 +287,6 @@ export function setupSocket(io: Server) {
     });
 
     socket.on("get-word-list", ({ roomCode }) => {
-      console.log("Getting words for room:", roomCode);
       const room = rooms[roomCode];
       if (!room) {
         return console.error("Room not found:", roomCode);
@@ -298,53 +296,6 @@ export function setupSocket(io: Server) {
       io.to(roomCode).emit("send-word-list", { selectedWords });
     });
 
-    // socket.on("word-chosen", ({ roomCode, word }) => {
-    //   const room = rooms[roomCode];
-    //   if (!room) {
-    //     return console.error("Room not found:", roomCode);
-    //   }
-
-    //   room.currentWord = word;
-    //   io.to(roomCode).emit('start-timer', { room });
-    // });
-
-    socket.on("end-turn", ({ roomCode }) => {
-      console.log("Ending turn for room:", roomCode);
-      const room = rooms[roomCode];
-      if (!room) {
-        console.error("Room not found:", roomCode);
-        return;
-      }
-
-      const currentIndex = room.players.findIndex(p => p.id === room.currentDrawer.id);
-      console.log("Current index:", currentIndex);
-      const nextIndex = (currentIndex + 1) % room.players.length;
-      console.log("Next index:", nextIndex);
-      room.currentDrawer = room.players[nextIndex];
-      console.log("Next drawer:", room.currentDrawer.userName);
-
-      // Incrémenter le round si on revient au premier joueur
-      if (nextIndex === room.players.length - 1) {
-        room.currentRound++;
-      }
-
-      console.log("Current round:", room.currentRound);
-
-      // Vérification de fin de partie
-      if (room.currentRound > room.roomSettings.rounds) {
-        console.log("Game ended");
-        io.to(roomCode).emit("game-ended", { winner: calculateWinner(room) });
-      } else {
-        room.timeLeft = room.roomSettings.drawTime; // Réinitialiser le timer
-        room.guessedPlayers = []; // Réinitialiser les joueurs ayant trouvé le mot
-        for (let player of room.players) {
-          player.hasGuessed = false;
-        }
-
-        io.to(roomCode).emit("next-turn", { room });
-      }
-    });
-
     socket.on('player-guessed', ({ roomCode, playerId }) => {
       const room = rooms[roomCode];
       if (!room) return;
@@ -352,34 +303,14 @@ export function setupSocket(io: Server) {
       if (!room.guessedPlayers.includes(playerId)) {
         room.guessedPlayers.push(playerId);
       }
-
-      if (room.guessedPlayers.length === room.players.length - 1) {
-        console.log("All players guessed the word!");
-        socket.emit("end-turn-no-timer", { room });
-      }
     });
 
-    // socket.on("game-ended", ({ roomCode }) => {
-    //   const room = rooms[roomCode];
-    //   if (!room) return;
-
-    //   room.gameStarted = false;
-    //   room.currentRound = 0;
-    //   room.currentDrawer = null;
-    //   room.timeLeft = 0;
-    //   room.currentWord = "";
-    //   room.guessedPlayers = [];
-
-    //   console.log("Game ended for room:", roomCode);
-    //   io.to(roomCode).emit("room-data-updated", { room });
-    // });
     socket.on("word-chosen", ({ roomId, word }) => {
       const room = rooms[roomId];
       if (!room) {
         console.error("Room not found:", roomId);
         return;
       }
-
       const currentDrawer = room.players[room.currentDrawerIndex];
       console.log("Word chosen received from:", socket.id, "Expected drawer:", currentDrawer.id);
 
@@ -387,8 +318,6 @@ export function setupSocket(io: Server) {
         console.error("Unauthorized word selection attempt by:", socket.id);
         return;
       }
-
-      // Assigner le mot et informer les autres joueurs
       room.currentWord = word;
       console.log("Word chosen:", word);
       io.to(roomId).emit("word-chosen", { currentWord: word, wordLength: word.length });
@@ -404,23 +333,9 @@ export function setupSocket(io: Server) {
       const currentDrawer = room.players[room.currentDrawerIndex];
       io.to(roomId).emit("turn-started", { drawer: currentDrawer, round: room.currentRound });
 
-      // Le dessinateur choisit un mot
       const wordOptions =  selectWords(room);
       console.log("Word options:", wordOptions);
       io.to(currentDrawer.id).emit("choose-word", { words: wordOptions });
-
-      // Enregistrer le mot choisi
-      // socket.on("word-chosen", ({ word }) => {
-      //   console.log("Word chosen:", word);
-      //   console.log("Current drawer:", currentDrawer.id);
-      //   if (socket.id !== currentDrawer.id) return;
-
-      //   room.currentWord = word;
-      //   console.log("Word chosen:", word);
-      //   io.to(roomId).emit("word-chosen", { wordLength: word.length });
-
-      //   startDrawingTimer(roomId);
-      // });
     }
 
     function startDrawingTimer(roomId: string) {
@@ -442,11 +357,9 @@ export function setupSocket(io: Server) {
     }
 
     function endTurn(roomId: string) {
-      console.log("Ending turn for room:", roomId);
       const room = rooms[roomId];
       console.log("Guessed players:", room.guessedPlayers);
 
-      // Attribution des points
       room.guessedPlayers?.forEach((player) => {
         room.scoreBoard.find((score) => score.playerId === player.id).score += 100;
       });
@@ -457,7 +370,6 @@ export function setupSocket(io: Server) {
         guessedPlayers: Array.from(room.guessedPlayers),
       });
 
-      // Préparation du prochain tour
       room.currentDrawerIndex = (room.currentDrawerIndex + 1) % room.players.length;
       if (room.currentDrawerIndex === room.players.length - 1) {
         room.currentRound += 1;
@@ -473,7 +385,6 @@ export function setupSocket(io: Server) {
 
     function endGame(roomId: string) {
       const room = rooms[roomId];
-
       const winner = Object.entries(room.scoreBoard).reduce((prev, current) => (prev[1].score > current[1].score ? prev : current));
 
       io.to(roomId).emit("game-ended", { winner, scores: Array.from(room.scoreBoard) });

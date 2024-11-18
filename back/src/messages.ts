@@ -1,5 +1,5 @@
 // src/messages.ts
-import { Room, Message } from "./types";
+import { Room, Message, Player } from "./types";
 import { levenshteinDistance } from "./levenshteinDistance";
 
 export function addJoinMessage(room: Room, userName: string) {
@@ -62,9 +62,10 @@ export function addChangeHostMessage(room: Room, userName: string) {
   room?.messages?.push(changeHostMessage);
 }
 
-export function checkMessage(room: Room, player: any, message: string): boolean{
+export function checkMessage(room: Room, player: Player, message: string): boolean{
   if (message === room?.currentWord && !player.hasGuessed && player.id !== room?.currentDrawer.id) {
     room?.guessedPlayers.push(player);
+    console.log(room?.guessedPlayers);
     player.hasGuessed = true;
     addGuessedMessage(room, player.userName);
     return true;

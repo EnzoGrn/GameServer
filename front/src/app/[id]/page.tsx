@@ -221,8 +221,9 @@ export default function Page()
     const handleTurnStarted = ({ drawer, round }: { drawer: Player; round: number }) => {
       console.log("Turn started:", drawer, round);
       setRoom((prevRoom) => prevRoom ? { ...prevRoom, currentDrawer: drawer, currentRound: round } : prevRoom);
-      setTimeLeft(thisRoom?.roomSettings?.drawTime || 60); // Initialiser le timer
-      setIsChoosingWord(socket.id === drawer.id); // Si c'est mon tour, je choisis un mot
+      setTimeLeft(thisRoom?.roomSettings?.drawTime || 60);
+      setIsChoosingWord(true);
+      setRenderPlay(true);
       console.log("leaving handleTurnStarted");
     };
 
