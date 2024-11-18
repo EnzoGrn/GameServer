@@ -2,6 +2,9 @@ import { Server } from "socket.io";
 import express from "express";
 import cors from "cors";
 import { setupSocket } from "./sockets";
+import dotenv from "dotenv";
+
+dotenv.config();
 
 const port = process.env.PORT || 3001;
 const app = express();
