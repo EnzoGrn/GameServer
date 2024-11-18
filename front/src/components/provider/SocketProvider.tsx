@@ -6,6 +6,8 @@ import React, { createContext, useContext, useEffect, useState, } from 'react';
 // --- Interfaces --- //
 import io, { Socket } from "socket.io-client";
 
+// --- Constants --- //
+
 const socketContext = createContext<{
     socket: Socket | null;
     setSocket: (socket: Socket | null) => void;
@@ -14,11 +16,13 @@ const socketContext = createContext<{
     setSocket: () => {}
 });
 
+const SERVER_URL = process.env.SERVER_URL || "http://localhost:3001";
+
 export const SocketProvider = ({ children }: any) => {
     const [socket, setSocket] = useState<Socket | null>(null);
 
     useEffect(() => {
-        setSocket(io('http://localhost:3001'));
+        setSocket(io(SERVER_URL));
     }, []);
 
     return (

@@ -334,16 +334,12 @@ export function setupSocket(io: Server) {
       io.to(roomId).emit("turn-started", { drawer: currentDrawer, round: room.currentRound });
 
       const wordOptions =  selectWords(room);
-      console.log("Word options:", wordOptions);
       io.to(currentDrawer.id).emit("choose-word", { words: wordOptions });
     }
 
     function startDrawingTimer(roomId: string) {
       const room = rooms[roomId];
       let timeLeft = room.roomSettings.drawTime;
-
-      console.log("Starting drawing timer for room:", roomId);
-      console.log("Time left:", timeLeft);
 
       const timer = setInterval(() => {
         timeLeft -= 1;
