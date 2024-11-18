@@ -216,9 +216,7 @@ export default function Page()
 
   const handleStartGame = () => {
     if (me?.host == false) return;
-
     socket?.emit("start-game", { roomCode: thisRoom?.id });
-    // playTurn();
   }
 
   useEffect(() => {
@@ -273,75 +271,10 @@ export default function Page()
     };
   }, [socket]);
 
-
-
-  const playTurn = () => {
-    // getWordList();
-  };
-
-  // socket?.on("send-word-list", ({ selectedWords }: { selectedWords: { id: number, text: string }[] }) => {
-  //   setWordList(selectedWords);
-  //   setIsChoosingWord(true);
-  // });
-
-  // const getWordList = () => {
-  //   socket?.emit("get-word-list", { roomCode: thisRoom?.id });
-  //   setIsChoosingWord(true);
-  // };
-
   const chooseWord = (word: string) => {
     socket?.emit("word-chosen", { roomId: thisRoom?.id, word });
     setIsChoosingWord(false);
   };
-
-  useEffect(() => {
-    if (!socket) return;
-
-    const handleStartTimer = ({ room }: { room: Room }) => {
-      if (room) {
-        setRoom(room);
-        setIsChoosingWord(false);
-        setTimeLeft(room.roomSettings.drawTime);
-
-        console.log("Drawer:", room.currentDrawer);
-
-        if (me?.id === room?.currentDrawer?.id)
-          setGameState('drawing');
-        else
-          setGameState('guessing');
-
-          let interval = setInterval(() => {
-          setTimeLeft((prev) => {
-            console.log('Time left:', prev);
-            console.log('Guessed players:', room.guessedPlayers.length);
-            if (prev <= 1) {
-              clearInterval(interval); // Stop the interval
-              if (me?.host)
-                socket.emit('end-turn', { roomCode: room.id }); // Utilisez les données à jour
-              return 0;
-            }
-            return prev - 1;
-          });
-        }, 1000);
-      } else {
-        console.error('Received null room during start-timer');
-      }
-    };
-
-    socket.on('start-timer', handleStartTimer);
-
-    return () => {
-      socket.off('start-timer', handleStartTimer);
-    };
-  }, [socket, me]);
-
-  // useEffect(() => {
-  //   socket?.on("you-guessed", ({ room }: { room: Room }) => {
-  //     setRoom(room);
-  //     console.log("you-guessed", socket?.id);
-  //     socket?.emit("player-guessed", { roomCode: room?.id, playerId: socket?.id });
-  //   });
-  // }, [socket]);
 
   useEffect(() => {
     if (!socket) return;
@@ -425,26 +358,6 @@ export default function Page()
       socket.off("game-ended", handleGameEnded);
     };
   }, [socket]);
-
-
-
-  // useEffect(() => {
-  //   socket?.on("next-turn", ({ room }: { room: Room }) => {
-  //     console.log("next-turn", room.currentDrawer, room.currentRound, room.timeLeft);
-  //     setRoom((prevRoom) => prevRoom ? ({
-  //       ...prevRoom,
-  //       currentDrawer: room.currentDrawer,
-  //       currentRound: room.currentRound,
-  //       timeLeft: room.timeLeft,
-  //     }) : prevRoom);
-  //     setIsChoosingWord(true);
-  //     getWordList();
-  //   });
-
-  //   return () => {
-  //     socket?.off("next-turn");
-  //   };
-  // }, [socket]);
 
   return (
     <div className="flex flex-col min-h-screen w-full">
