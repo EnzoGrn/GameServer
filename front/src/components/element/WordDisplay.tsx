@@ -18,10 +18,9 @@ const WordDisplay = ({ gameState, word } : { gameState: GameState, word?: string
         <>
           <p className="text-xl font-bold">Word to Guess:</p>
           <p className="text-2xl mt-2 font-mono">
-              {Array.from(word).map((char) => (char === " " ? " " : "_")).join(" ")}{" "}
-              {/* Displays _ _ _ based on word length or word */}
+            {word}
 
-              <span className="ml-2 text-sm">{word.length}</span>
+            <span className="ml-2 text-sm">{word.length}</span>
           </p>
         </>
       )}

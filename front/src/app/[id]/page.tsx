@@ -33,8 +33,6 @@ export default function Page()
    */
   useEffect(() => {
     setInviteLink(`${window.location.origin}?code=${params.id}`);
-
-    console.log('Invitation link: ', inviteLink);
   }, [params]);
 
   // -- Canvas -- //
@@ -51,8 +49,6 @@ export default function Page()
         for (let player of room.players) {
           if (player.id === socket.id) {
             setMe(player);
-
-            console.log('Me:', player);
           }
         }
 
@@ -279,69 +275,16 @@ export default function Page()
     // getWordList();
   };
 
-  // socket?.on("send-word-list", ({ selectedWords }: { selectedWords: { id: number, text: string }[] }) => {
-  //   setWordList(selectedWords);
-  //   setIsChoosingWord(true);
-  // });
-
-  // const getWordList = () => {
-  //   socket?.emit("get-word-list", { roomCode: thisRoom?.id });
-  //   setIsChoosingWord(true);
-  // };
-
   const chooseWord = (word: string) => {
     socket?.emit("word-chosen", { roomId: thisRoom?.id, word });
+
     setIsChoosingWord(false);
+
+    if (me?.id === thisRoom?.currentDrawer?.id)
+      setGameState('drawing');
+    else
+      setGameState('guessing');
   };
-
-  useEffect(() => {
-    if (!socket) return;
-
-    const handleStartTimer = ({ room }: { room: Room }) => {
-      if (room) {
-        setRoom(room);
-        setIsChoosingWord(false);
-        setTimeLeft(room.roomSettings.drawTime);
-
-        console.log("Drawer:", room.currentDrawer);
-
-        if (me?.id === room?.currentDrawer?.id)
-          setGameState('drawing');
-        else
-          setGameState('guessing');
-
-          let interval = setInterval(() => {
-          setTimeLeft((prev) => {
-            console.log('Time left:', prev);
-            console.log('Guessed players:', room.guessedPlayers.length);
-            if (prev <= 1) {
-              clearInterval(interval); // Stop the interval
-              if (me?.host)
-                socket.emit('end-turn', { roomCode: room.id }); // Utilisez les données à jour
-              return 0;
-            }
-            return prev - 1;
-          });
-        }, 1000);
-      } else {
-        console.error('Received null room during start-timer');
-      }
-    };
-
-    socket.on('start-timer', handleStartTimer);
-
-    return () => {
-      socket.off('start-timer', handleStartTimer);
-    };
-  }, [socket, me]);
-
-  // useEffect(() => {
-  //   socket?.on("you-guessed", ({ room }: { room: Room }) => {
-  //     setRoom(room);
-  //     console.log("you-guessed", socket?.id);
-  //     socket?.emit("player-guessed", { roomCode: room?.id, playerId: socket?.id });
-  //   });
-  // }, [socket]);
 
   useEffect(() => {
     if (!socket) return;
