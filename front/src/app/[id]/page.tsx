@@ -212,9 +212,7 @@ export default function Page()
 
   const handleStartGame = () => {
     if (me?.host == false) return;
-
     socket?.emit("start-game", { roomCode: thisRoom?.id });
-    // playTurn();
   }
 
   useEffect(() => {
@@ -268,12 +266,6 @@ export default function Page()
       socket.off("word-chosen", handleWordChosen);
     };
   }, [socket]);
-
-
-
-  const playTurn = () => {
-    // getWordList();
-  };
 
   const chooseWord = (word: string) => {
     socket?.emit("word-chosen", { roomId: thisRoom?.id, word });
@@ -368,26 +360,6 @@ export default function Page()
       socket.off("game-ended", handleGameEnded);
     };
   }, [socket]);
-
-
-
-  // useEffect(() => {
-  //   socket?.on("next-turn", ({ room }: { room: Room }) => {
-  //     console.log("next-turn", room.currentDrawer, room.currentRound, room.timeLeft);
-  //     setRoom((prevRoom) => prevRoom ? ({
-  //       ...prevRoom,
-  //       currentDrawer: room.currentDrawer,
-  //       currentRound: room.currentRound,
-  //       timeLeft: room.timeLeft,
-  //     }) : prevRoom);
-  //     setIsChoosingWord(true);
-  //     getWordList();
-  //   });
-
-  //   return () => {
-  //     socket?.off("next-turn");
-  //   };
-  // }, [socket]);
 
   return (
     <div className="flex flex-col min-h-screen w-full">
