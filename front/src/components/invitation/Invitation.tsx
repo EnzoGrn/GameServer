@@ -6,14 +6,32 @@ const InvitationBox = ({ invitationCode } : { invitationCode: string }) => {
   const [copied, setCopied] = useState<boolean>(false);
 
   const handleCopy = () => {
-    navigator.clipboard.writeText(invitationCode).then(() => {
-      setCopied(true);
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(invitationCode).then(() => {
+        setCopied(true);
+  
+        setTimeout(() => {
+          setCopied(false);
+        }, 2000);
+      });
+    } else {
+      const textArea = document.createElement("textarea");
 
-      // -- Optimisation -- //
-      setTimeout(() => { // Block the spam of the copy button
-        setCopied(false);
-      }, 2000);
-    });
+      textArea.value = invitationCode;
+      document.body.appendChild(textArea);
+      textArea.select();
+
+      try {
+        document.execCommand("copy");
+
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      } catch (err) {
+        console.error("Erreur lors de la copie :", err);
+      }
+
+      document.body.removeChild(textArea);
+    }
   };
 
   return (

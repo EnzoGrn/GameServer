@@ -42,7 +42,9 @@ export default function Page()
    * @brief Generate a invite link
    */
   useEffect(() => {
-    setInviteLink(`${window.location.origin}?code=${params.id}`);
+    if (params.id) {
+      setInviteLink(`${window.location.origin}?code=${params.id}`);
+    }
   }, [params]);
 
   // -- Canvas -- //
