@@ -16,7 +16,7 @@ import { Socket } from 'socket.io-client';
 import p5 from 'p5';
 
 // -- Types -- //
-import { Player, Room, Message } from '@/lib/type/types';
+import { Player, Room, Message, ScoreBoard } from '@/lib/type/types';
 import { MouseData } from '@/lib/type/mouseData';
 import { isDrawing } from '@/lib/player/isDrawing';
 
@@ -365,10 +365,10 @@ export default function Page()
   useEffect(() => {
     if (!socket)
       return;
-    const handleTurnEnded = ({ scores, word, guessedPlayers } : { scores: { [playerId: string]: number }, word: string, guessedPlayers: string[] }) => {
-      setRoom((prevRoom) => prevRoom ? { ...prevRoom, scores, currentWord: word, guessedPlayers: prevRoom.players.filter(player => guessedPlayers.includes(player.id)) } : prevRoom);
+    const handleTurnEnded = ({ scores, word, guessedPlayers } : { scores: ScoreBoard[], word: string, guessedPlayers: Player[] }) => {
+      setRoom((prevRoom) => prevRoom ? { ...prevRoom, scoreBoard: scores, guessedPlayers, currentWord: word } : prevRoom);
 
-      console.log("Turn ended:", word, guessedPlayers);
+      console.log("Turn ended:", word, guessedPlayers, scores);
     };
 
     socket.on("turn-ended", handleTurnEnded);
@@ -376,7 +376,7 @@ export default function Page()
     return () => {
       socket.off("turn-ended", handleTurnEnded);
     };
-  }, [socket]);
+  }, [socket, thisRoom]);
 
   useEffect(() => {
     if (!socket)

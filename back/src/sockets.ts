@@ -183,6 +183,10 @@ export function setupSocket(io: Server) {
 
             addChangeHostMessage(room, randomPlayer.userName);
           }
+
+          if (room.gameStarted && room.players.length < 2) {
+            endGame(room.id);
+          }
           io.to(room.id).emit("room-data-updated", { room });
         }
       }
@@ -218,6 +222,20 @@ export function setupSocket(io: Server) {
 
       if (room.players.length === 0) {
         delete rooms[roomCode];
+      }
+
+      if (mySelf.host && room.players.length > 0) {
+        const randomPlayer = room.players[Math.floor(Math.random() * room.players.length)];
+
+        room.players = room.players.map((checker) =>
+          checker.id === randomPlayer.id ? { ...checker, host: true } : checker
+        );
+
+        addChangeHostMessage(room, randomPlayer.userName);
+      }
+
+      if (room.gameStarted && room.players.length < 2) {
+        endGame(room.id);
       }
 
       io.to(roomCode).emit("room-data-updated", { room: rooms[roomCode] });
@@ -368,9 +386,9 @@ export function setupSocket(io: Server) {
       });
 
       io.to(roomId).emit("turn-ended", {
-        scores: Array.from(room.scoreBoard),
+        scores: room.scoreBoard,
         word: room.currentWord,
-        guessedPlayers: Array.from(room.guessedPlayers),
+        guessedPlayers: room.guessedPlayers,
       });
 
       room.currentDrawerIndex = (room.currentDrawerIndex + 1) % room.players.length;
