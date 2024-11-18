@@ -120,6 +120,7 @@ export default function Page()
         return;
       if (room?.currentDrawer?.id !== socket.id)
         return;
+      const currentTool = toolRef.current;
       const x  = p.mouseX;
       const y  = p.mouseY;
       const px = p.pmouseX;
@@ -131,8 +132,8 @@ export default function Page()
         y,
         px,
         py,
-        color: tool === 'eraser' ? '#FFFFFF' : '#000000',
-        strokeWidth: tool === 'eraser' ? strokeWidth * 2 : strokeWidth,
+        color: currentTool === 'eraser' ? '#FFFFFF' : '#000000',
+        strokeWidth: currentTool === 'eraser' ? strokeWidth * 2 : strokeWidth,
         senderId: socket.id || '',
         roomCode: room?.id || '',
       };
@@ -395,9 +396,15 @@ export default function Page()
   }, [socket]);
 
   // -- Tools -- //
-
   const [tool, setTool] = useState<'pencil' | 'eraser'>('pencil'); // Outil actif
   const [strokeWidth, setStrokeWidth] = useState(4); // Épaisseur du trait
+  const [color, setColor] = useState('#000000'); // Couleur du crayon
+
+  const toolRef = useRef(tool);
+
+  useEffect(() => {
+    toolRef.current = tool;
+  }, [tool]);
 
   return (
     <div className="flex flex-col min-h-screen w-full">
@@ -410,7 +417,7 @@ export default function Page()
       </div>
 
       {/* Main Section */}
-      <div className="flex flex-col md:flex-row flex-grow">
+      <div className="flex flex-col md:flex-row flex-grow h-full">
 
         {/* Liste des joueurs */}
         <PlayerList players={thisRoom?.players} me={me} drawer={thisRoom?.currentDrawer} scoreBoard={thisRoom?.scoreBoard} />
@@ -418,7 +425,7 @@ export default function Page()
         {/* Zone de dessin */}
         <div className="flex-1 p-4 flex flex-col items-center order-1 md:order-2">
 
-          {/* Canvas */}
+          {/* Canvas */}          
           <div className="relative w-full">
             <div ref={canvasParentRef} className="absolute w-full h-64 md:h-96 bg-white border border-gray-300 rounded-md mb-4">
               {/* The canvas will dynamically being load here.. */}
@@ -466,25 +473,14 @@ export default function Page()
           {/* Tools (brush) */}
           {gameStarted && canDraw && isDrawing(me!, thisRoom?.currentDrawer) && (
             <div className="flex items-center space-x-2 md:space-x-4">
-              <button
-                onClick={() => setTool('pencil')}
-                className={`px-3 md:px-4 py-1 md:py-2 rounded-md ${tool === 'pencil' ? 'bg-blue-500 text-white' : 'bg-gray-200'
-                  }`}
-              >
-                Crayon
-              </button>
-              <button
-                onClick={() => setTool('eraser')}
-                className={`px-3 md:px-4 py-1 md:py-2 rounded-md ${tool === 'eraser' ? 'bg-blue-500 text-white' : 'bg-gray-200'
-                  }`}
-              >
-                Gomme
-              </button>
+              <button onClick={() => setTool('pencil')}>Pencil</button>
+              <button onClick={() => setTool('eraser')}>Eraser</button>
+
               <button
                 onClick={clearCanvas}
                 className="bg-red-400 px-3 md:px-4 py-1 md:py-2 rounded-md text-white"
               >
-                Réinitialiser
+                Clear
               </button>
             </div>
           )}
@@ -503,7 +499,7 @@ export default function Page()
         </div>
 
         {/* Chat */}
-        <div className="w-full md:w-1/4 p-4 bg-white shadow-md flex flex-col order-3 md:order-3">
+        <div className="w-full md:w-1/4 p-4 bg-white shadow-md rounded-b-md border-[#c44b4a] border-b-2 border-l-2 flex flex-col order-3 md:order-3">
           <h2 className="text-xl font-semibold mb-4">Chat</h2>
           <div className="flex-1 overflow-y-auto space-y-2">
             {/* Boucle à travers les messages dans room.messages */}
