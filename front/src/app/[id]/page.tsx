@@ -99,8 +99,8 @@ export default function Page()
     };
 
     p.mouseDragged = () => {
-      if (socket?.id !== thisRoom?.currentDrawer?.id)
-        return; // Bloque le dessin si ce n'est pas leur tour
+      //if (socket?.id !== thisRoom?.currentDrawer?.id)
+      //  return; // Bloque le dessin si ce n'est pas leur tour
       const x  = p.mouseX;
       const y  = p.mouseY;
       const px = p.pmouseX;
