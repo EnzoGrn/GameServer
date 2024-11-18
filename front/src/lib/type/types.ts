@@ -1,4 +1,9 @@
 // src/types.ts
+export interface ScoreBoard {
+    playerId: string;
+    score: number;
+}
+
 export interface Player {
     id: string;
     userName: string;
@@ -14,7 +19,7 @@ export interface Room {
     id: string;
     players: Player[];
     messages: any[];
-    scoreBoard: any[];
+    scoreBoard: ScoreBoard[];
     customWords: string[];
     guessedPlayers: Player[];
     currentWord: string;

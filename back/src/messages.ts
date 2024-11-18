@@ -64,7 +64,7 @@ export function addChangeHostMessage(room: Room, userName: string) {
 
 export function checkMessage(room: Room, player: any, message: string): boolean{
   if (message === room?.currentWord && !player.hasGuessed && player.id !== room?.currentDrawer.id) {
-    room?.guessedPlayers.push(player.userName);
+    room?.guessedPlayers.push(player);
     player.hasGuessed = true;
     addGuessedMessage(room, player.userName);
     return true;

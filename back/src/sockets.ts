@@ -443,10 +443,11 @@ export function setupSocket(io: Server) {
     function endTurn(roomId: string) {
       console.log("Ending turn for room:", roomId);
       const room = rooms[roomId];
+      console.log("Guessed players:", room.guessedPlayers);
 
       // Attribution des points
-      room.guessedPlayers.forEach((playerId) => {
-        room.scoreBoard.find((score) => score.playerId === playerId).score += 100;
+      room.guessedPlayers?.forEach((player) => {
+        room.scoreBoard.find((score) => score.playerId === player.id).score += 100;
       });
 
       io.to(roomId).emit("turn-ended", {
@@ -457,7 +458,7 @@ export function setupSocket(io: Server) {
 
       // Préparation du prochain tour
       room.currentDrawerIndex = (room.currentDrawerIndex + 1) % room.players.length;
-      if (room.currentDrawerIndex === 0) {
+      if (room.currentDrawerIndex === room.players.length - 1) {
         room.currentRound += 1;
         if (room.currentRound > room.roomSettings.rounds) {
           endGame(roomId);
