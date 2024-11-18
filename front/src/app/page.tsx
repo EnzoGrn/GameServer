@@ -169,7 +169,7 @@ export default function Home()
     <main className="flex flex-col items-center justify-center min-h-screen text-base-content px-4">
 
       {/* Title of the game */}
-      <Title title={'Drawing Together'} />
+      <Title title={"Draw'IT Together"} />
 
       {/* Main Section */}
       <div className="w-full p-6 bg-white rounded-lg shadow-md">

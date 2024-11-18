@@ -24,6 +24,15 @@ export default function Page()
 {
   // -- The socket -- //
   const { socket } = useSocket();
+  const [thisRoom, setRoom] = useState<Room | null>(null);
+
+  socket?.on('room-data-updated', ({ room }: { room: Room }) => {
+    if (room) {
+      console.log('Room updated:', room);
+
+      setRoom(room);
+    }
+  });
 
   // -- Get the room ID from the URL -- //
   const params = useParams<{ id: string }>();
@@ -57,14 +66,13 @@ export default function Page()
       });
 
       socket.emit('get-room', params.id);
-
-      return () => {
-        socket.off('send-room');
-      };
     }
 
-    if (canvasParentRef.current && socket)
+    if (canvasParentRef.current && socket) {
+      console.log('Creating P5 instance...');
+
       setP5Instance(new p5((p: p5) => sketch(p, socket), canvasParentRef.current));
+    }
 
     return () => {
       p5Instance?.remove();
@@ -76,6 +84,8 @@ export default function Page()
       if (canvasParentRef.current) {
         const { width, height } = canvasParentRef.current.getBoundingClientRect();
         const canvas            = p.createCanvas(width, height);
+
+        p.background(255);
 
         canvas.parent(canvasParentRef.current);
 
@@ -172,41 +182,20 @@ export default function Page()
   // -- My profile -- //
   const [me, setMe] = useState<Player | undefined>(undefined);
 
-  // -- Game State -- //
-  const [gameState, setGameState] = useState<GameState>('waiting');
-
   // -- Word List -- //
   const [wordList      , setWordList]       = useState<{ id: number, text: string }[]>([]);
-  const [isChoosingWord, setIsChoosingWord] = useState<boolean>(false);
+  const [isChoosingWord, setIsChoosingWord] = useState<boolean>(false); 
 
-  // -- State -- //
+  // -- Game State -- //
+  const [gameState  , setGameState]   = useState<GameState>('waiting');
+  const [gameStarted, setGameStarted] = useState<boolean>(false);
+  const [canDraw    , setCanDraw]     = useState<boolean>(false);
+  const [timeLeft   , setTimeLeft]    = useState<number>(0);
 
-  const [message, setMessage] = useState('');
-  const [timeLeft, setTimeLeft] = useState(0); // Exemple de timer
-  const [tool, setTool] = useState<'pencil' | 'eraser'>('pencil'); // Outil actif
-  const [strokeWidth, setStrokeWidth] = useState(4); // Épaisseur du trait
-  const [thisRoom, setRoom] = useState<Room | null>(null);
-  const [renderPlay, setRenderPlay] = useState(false);
-
-  const SendChatMessage = () => {
-    socket?.emit('message-sent', { roomCode: thisRoom?.id, message });
-    setMessage('');
-  }
-
-  socket?.on('room-data-updated', ({ room }: { room: Room }) => {
-    if (room) {
-      console.log('Room updated:', room);
-      setRoom(room);
-    } else {
-      console.error('Received null room data');
-    }
-  });
-
-  socket?.on('game-started', ({ room }: { room: Room }) => {
-    setRenderPlay(true);
-    setRoom(room);
-  });
-
+  /*
+   * @brief Callback of the started button for launching the game
+   * @note Only the host can start the game
+   */
   const handleStartGame = () => {
     if (me?.host == false)
       return;
@@ -215,16 +204,17 @@ export default function Page()
     });
   }
 
+  /*
+   * @brief Function call every time a turn is started
+   */
   useEffect(() => {
-    if (!socket) return;
-
+    if (!socket)
+      return;
     const handleTurnStarted = ({ drawer, round }: { drawer: Player; round: number }) => {
-      console.log("Turn started:", drawer, round);
       setRoom((prevRoom) => prevRoom ? { ...prevRoom, currentDrawer: drawer, currentRound: round } : prevRoom);
       setTimeLeft(thisRoom?.roomSettings?.drawTime || 60);
-      setIsChoosingWord(true);
-      setRenderPlay(true);
-      console.log("leaving handleTurnStarted");
+      setCanDraw(false);
+      setGameStarted(true);
     };
 
     socket.on("turn-started", handleTurnStarted);
@@ -234,14 +224,26 @@ export default function Page()
     };
   }, [socket, thisRoom]);
 
-  useEffect(() => {
-    if (!socket) return;
+  // -- Chat -- //
+  const [message, setMessage] = useState<string>("");
 
+  const SendChatMessage = () => {
+    socket?.emit('message-sent', {
+      roomCode: thisRoom?.id, message
+    });
+
+    setMessage("");
+  }
+
+  useEffect(() => {
+    if (!socket)
+      return;
     const handleChooseWord = ({ words }: { words: { id: number, text: string }[] }) => {
-      console.log("choose-word", words);
+      console.log("Words to choose: ", words);
+
+      setGameState('choose');
       setWordList(words);
       setIsChoosingWord(true);
-      console.log("leaving handleChooseWord");
     };
 
     socket.on("choose-word", handleChooseWord);
@@ -252,8 +254,8 @@ export default function Page()
   }, [socket]);
 
   useEffect(() => {
-    if (!socket) return;
-
+    if (!socket)
+      return;
     const handleWordChosen = ({ currentWord, wordLength }: { currentWord: string, wordLength: number }) => {
       setIsChoosingWord(false);
 
@@ -266,6 +268,7 @@ export default function Page()
         setGameState('drawing');
       else
         setGameState('guessing');
+      setCanDraw(true);
     };
 
     socket.on("word-chosen", handleWordChosen);
@@ -277,8 +280,6 @@ export default function Page()
 
   const chooseWord = (word: string) => {
     socket?.emit("word-chosen", { roomId: thisRoom?.id, word });
-
-    setIsChoosingWord(false);
   };
 
   useEffect(() => {
@@ -298,10 +299,11 @@ export default function Page()
   }, [socket]);
 
   useEffect(() => {
-    if (!socket) return;
-
+    if (!socket)
+      return;
     const handleTimerUpdate = ({ timeLeft }: { timeLeft: number }) => {
       console.log("Timer update:", timeLeft);
+
       setTimeLeft(timeLeft);
     };
 
@@ -313,22 +315,11 @@ export default function Page()
   }, [socket]);
 
   useEffect(() => {
-    if (!socket) return;
+    if (!socket)
+      return;
+    const handleTurnEnded = ({ scores, word, guessedPlayers } : { scores: { [playerId: string]: number }, word: string, guessedPlayers: string[] }) => {
+      setRoom((prevRoom) => prevRoom ? { ...prevRoom, scores, currentWord: word, guessedPlayers: prevRoom.players.filter(player => guessedPlayers.includes(player.id)) } : prevRoom);
 
-    const handleTurnEnded = ({
-      scores,
-      word,
-      guessedPlayers,
-    }: {
-      scores: { [playerId: string]: number };
-      word: string;
-      guessedPlayers: string[];
-    }) => {
-      setRoom((prevRoom) =>
-        prevRoom
-          ? { ...prevRoom, scores, currentWord: word, guessedPlayers: prevRoom.players.filter(player => guessedPlayers.includes(player.id)) }
-          : prevRoom
-      );
       console.log("Turn ended:", word, guessedPlayers);
     };
 
@@ -340,21 +331,12 @@ export default function Page()
   }, [socket]);
 
   useEffect(() => {
-    if (!socket) return;
-
-    const handleGameEnded = ({
-      winner,
-      scores,
-    }: {
-      winner: { id: string; score: number };
-      scores: { [playerId: string]: number };
-    }) => {
+    if (!socket)
+      return;
+    const handleGameEnded = ({ winner, scores } : { winner: { id: string; score: number }, scores: { [playerId: string]: number } }) => {
       console.log("Game ended. Winner:", winner);
-      setRoom((prevRoom) =>
-        prevRoom
-          ? { ...prevRoom, scores, gameEnded: true }
-          : prevRoom
-      );
+
+      setRoom((prevRoom) => prevRoom ? { ...prevRoom, scores, gameEnded: true } : prevRoom);
     };
 
     socket.on("game-ended", handleGameEnded);
@@ -363,6 +345,11 @@ export default function Page()
       socket.off("game-ended", handleGameEnded);
     };
   }, [socket]);
+
+  // -- Tools -- //
+
+  const [tool, setTool] = useState<'pencil' | 'eraser'>('pencil'); // Outil actif
+  const [strokeWidth, setStrokeWidth] = useState(4); // Épaisseur du trait  
 
   return (
     <div className="flex flex-col min-h-screen w-full">
@@ -385,9 +372,19 @@ export default function Page()
 
           {/* Canvas */}
           <div className="relative w-full">
-            <div ref={canvasParentRef} className="absolute w-full h-64 md:h-96 bg-white border border-gray-300 rounded-md mb-4" />
+            <div ref={canvasParentRef} className="absolute w-full h-64 md:h-96 bg-white border border-gray-300 rounded-md mb-4">
+              {/* The canvas will dynamically being load here.. */}
+            </div>
 
-            {!renderPlay &&
+            {/* If the game is not start */}
+            {!gameStarted &&
+              <div className="absolute w-full h-64 md:h-96 bg-gray-500 bg-opacity-50 border border-gray-400 rounded-md mb-4 flex justify-center items-center z-100">
+                {/* Settings of the game */}
+              </div>
+            }
+
+            {/* If the game is started, and you can't draw */}
+            {gameStarted && !canDraw &&
               <div className="absolute w-full h-64 md:h-96 bg-gray-500 bg-opacity-50 border border-gray-400 rounded-md mb-4 flex justify-center items-center z-100">
                 {isChoosingWord && isDrawing(me!, thisRoom?.currentDrawer!) ?
                   (
@@ -396,7 +393,7 @@ export default function Page()
                         Choose a word
                       </div>
                       <div className="w-full flex justify-center m-4">
-                        {wordList?.map((word) => (
+                        {wordList?.length > 0 && wordList?.map((word) => (
                           <button
                             key={word?.id} onClick={() => chooseWord(word?.text)}
                             className="bg-white hover:bg-slate-100 text-gray-800 px-6 py-2 rounded-md text-lg mr-4"
@@ -418,8 +415,8 @@ export default function Page()
             <div ref={hiddenCanvasRef} className="relative top-0 left-0 w-full h-64 md:h-96 bg-transparent z-[-1]" />
           </div>
 
-          {/* Contrôles pour les outils */}
-          {renderPlay && isDrawing(me!) && (
+          {/* Tools (brush) */}
+          {gameStarted && canDraw && isDrawing(me!, thisRoom?.currentDrawer) && (
             <div className="flex items-center space-x-2 md:space-x-4">
               <button
                 onClick={() => setTool('pencil')}
@@ -445,7 +442,7 @@ export default function Page()
           )}
 
           {/* Bouton pour lancer la partie */}
-          {!renderPlay && (
+          {!gameStarted && me?.host === true && (
             <div className="w-full flex justify-center m-4">
               <button
                 onClick={() => handleStartGame()}
