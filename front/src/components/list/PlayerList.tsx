@@ -11,7 +11,7 @@ const PlayerList = ({ players, me, drawer, scoreBoard } : { players?: Player[], 
         {players && players.map((player: Player, index: number) => (
           <li
             key={player.id}
-            className={`p-2 rounded-md mb-2 flex flex-row items-center ${isDrawing(player, drawer) ? 'bg-blue-100' : 'bg-gray-100'}`}
+            className={`p-2 rounded-md mb-2 flex flex-row items-center border-2 border-[#c44b4a] ${isDrawing(player, drawer) ? 'bg-slate-200' : 'bg-gray-100'}`}
           >
             <span className="font-bold mr-4">#{index + 1}</span>
             <div className="flex flex-col items-center mr-2">
