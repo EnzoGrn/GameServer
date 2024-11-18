@@ -72,21 +72,15 @@ export function addChangeHostMessage(room: Room, userName: string) {
 
 export function checkMessage(room: Room, player: Player, message: string): boolean{
   if (message === room?.currentWord && !player.hasGuessed && player.id !== room?.currentDrawer.id) {
-    console.log("word guessed");
     room?.guessedPlayers.push(player);
     console.log(room?.guessedPlayers);
     player.hasGuessed = true;
     addGuessedMessage(room, player.userName);
     return true;
   } else {
-    console.log("word not guessed");
-    console.log("player.hasGuessed", player.hasGuessed);
-    console.log("player.id", player.id);
-    console.log("room?.currentDrawer.id", room?.currentDrawer.id);
     if (!player.hasGuessed && player.id !== room?.currentDrawer?.id) {
       const distance = levenshteinDistance(message, room?.currentWord);
 
-      console.log("distance", distance);
       if (distance < 2 && distance > 0) {
         const almostCorrectMessage: Message = {
           text: message + " is close!",
