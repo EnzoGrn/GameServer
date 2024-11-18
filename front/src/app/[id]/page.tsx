@@ -253,10 +253,18 @@ export default function Page()
   useEffect(() => {
     if (!socket) return;
 
-    const handleWordChosen = ({ wordLength }: { wordLength: number }) => {
+    const handleWordChosen = ({ currentWord, wordLength }: { currentWord: string, wordLength: number }) => {
       console.log("word-chosen", wordLength);
       setIsChoosingWord(false); // Le choix de mot est terminé
-      setRoom((prevRoom) => prevRoom ? { ...prevRoom, currentWord: "_".repeat(wordLength) } : prevRoom); // Affiche un masque du mot
+      console.log("CurrentDrawer:", thisRoom?.currentDrawer?.id);
+      console.log("SocketId:", socket.id);
+      if (thisRoom?.currentDrawer?.id !== socket.id) {
+        console.log("Im not the drawer");
+        setRoom((prevRoom) => prevRoom ? { ...prevRoom, currentWord: "_".repeat(wordLength) } : prevRoom); // Affiche un masque du mot
+      } else {
+        console.log("Im the drawer");
+        setRoom((prevRoom) => prevRoom ? { ...prevRoom, currentWord } : prevRoom); // Affiche le mot choisi
+      }
       console.log("leaving handleWordChosen");
     };
 
@@ -265,7 +273,7 @@ export default function Page()
     return () => {
       socket.off("word-chosen", handleWordChosen);
     };
-  }, [socket]);
+  }, [socket, thisRoom]);
 
   const chooseWord = (word: string) => {
     socket?.emit("word-chosen", { roomId: thisRoom?.id, word });
