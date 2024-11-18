@@ -333,6 +333,7 @@ export default function Page()
 
         {/* Zone de dessin */}
         <div className="flex-1 p-4 flex flex-col items-center order-1 md:order-2">
+
           {/* Bouton pour lancer la partie */}
           {!renderPlay && (
             <div className="w-full flex justify-center m-4">
@@ -371,6 +372,12 @@ export default function Page()
           {/* Canvas */}
           <div className="relative w-full">
             <div ref={canvasParentRef} className="absolute w-full h-64 md:h-96 bg-white border border-gray-300 rounded-md mb-4" />
+
+            {isChoosingWord &&
+              <div className="absolute w-full h-64 md:h-96 bg-gray-500 bg-opacity-50 border border-gray-400 rounded-md mb-4">
+              </div>
+            }
+
             <div ref={hiddenCanvasRef} className="relative top-0 left-0 w-full h-64 md:h-96 bg-transparent z-0" />
           </div>
 
