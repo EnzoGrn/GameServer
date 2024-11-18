@@ -379,6 +379,10 @@ export function setupSocket(io: Server) {
         }
       }
 
+      for (let player of room.players) {
+        player.hasGuessed = false;
+      }
+
       room.guessedPlayers = [];
       startTurn(roomId);
     }
