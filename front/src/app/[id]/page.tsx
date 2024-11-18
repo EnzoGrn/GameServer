@@ -218,6 +218,8 @@ export default function Page()
   const [gameStarted, setGameStarted] = useState<boolean>(false);
   const [canDraw    , setCanDraw]     = useState<boolean>(false);
   const [timeLeft   , setTimeLeft]    = useState<number>(0);
+  const [showScore  , setShowScore]   = useState<boolean>(false);
+  const [winner     , setWinner]      = useState<{ id: string; score: number } | null>(null);
 
   const canDrawRef = useRef<boolean>(canDraw);
 
@@ -235,6 +237,8 @@ export default function Page()
     socket?.emit("start-game", {
       roomCode: thisRoom?.id
     });
+
+    setShowScore(false);
   }
 
   /*
@@ -335,8 +339,6 @@ export default function Page()
     if (!socket) return;
 
     const handleYouGuessed = () => {
-      console.log("You guessed the word!");
-
       setGameState("guess");
     };
 
@@ -383,7 +385,8 @@ export default function Page()
     if (!socket)
       return;
     const handleGameEnded = ({ winner, scores } : { winner: { id: string; score: number }, scores: { [playerId: string]: number } }) => {
-      console.log("Game ended. Winner:", winner);
+      setShowScore(true);
+      setWinner(winner);
 
       setRoom((prevRoom) => prevRoom ? { ...prevRoom, scores, gameEnded: true } : prevRoom);
     };
@@ -463,6 +466,18 @@ export default function Page()
                       {thisRoom?.currentDrawer?.userName} is choosing the word!
                     </div>
                   )
+                }
+
+                {showScore &&
+                  <div className="flex-col justify-center items-center">
+                    <div
+                      className="relative flex items-center justify-center bg-center bg-cover"
+                      style={{ backgroundImage: "url('score.gif')" }}
+                    />
+                    <div className='text-white font-lg'>
+                      {winner ? thisRoom?.players.find(player => player.id === winner.id)?.userName : "No winner"} has won! With a score of {winner?.score}
+                    </div>
+                  </div>
                 }
               </div>
             }
