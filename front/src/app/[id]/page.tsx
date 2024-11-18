@@ -16,7 +16,7 @@ import { Socket } from 'socket.io-client';
 import p5 from 'p5';
 
 // -- Types -- //
-import { Player, Room, Message } from '@/lib/type/types';
+import { Player, Room, Message, ScoreBoard } from '@/lib/type/types';
 import { MouseData } from '@/lib/type/mouseData';
 import { isDrawing } from '@/lib/player/isDrawing';
 
@@ -202,6 +202,11 @@ export default function Page()
 
   // -- My profile -- //
   const [me, setMe] = useState<Player | undefined>(undefined);
+  const meRef = useRef<Player | undefined>(me);
+
+  useEffect(() => {
+    meRef.current = me;
+  }, [me]);
 
   // -- Word List -- //
   const [wordList      , setWordList]       = useState<{ id: number, text: string }[]>([]);
@@ -368,10 +373,10 @@ export default function Page()
   useEffect(() => {
     if (!socket)
       return;
-    const handleTurnEnded = ({ scores, word, guessedPlayers } : { scores: { [playerId: string]: number }, word: string, guessedPlayers: string[] }) => {
-      setRoom((prevRoom) => prevRoom ? { ...prevRoom, scores, currentWord: word, guessedPlayers: prevRoom.players.filter(player => guessedPlayers.includes(player.id)) } : prevRoom);
+    const handleTurnEnded = ({ scores, word, guessedPlayers } : { scores: ScoreBoard[], word: string, guessedPlayers: Player[] }) => {
+      setRoom((prevRoom) => prevRoom ? { ...prevRoom, scoreBoard: scores, guessedPlayers, currentWord: word } : prevRoom);
 
-      console.log("Turn ended:", word, guessedPlayers);
+      console.log("Turn ended:", word, guessedPlayers, scores);
     };
 
     socket.on("turn-ended", handleTurnEnded);
@@ -379,16 +384,33 @@ export default function Page()
     return () => {
       socket.off("turn-ended", handleTurnEnded);
     };
-  }, [socket]);
+  }, [socket, thisRoom]);
 
   useEffect(() => {
     if (!socket)
       return;
     const handleGameEnded = ({ winner, scores } : { winner: { id: string; score: number }, scores: { [playerId: string]: number } }) => {
+      setCanDraw(false);
+      setGameStarted(false);
       setShowScore(true);
-      setWinner(winner);
 
       setRoom((prevRoom) => prevRoom ? { ...prevRoom, scores, gameEnded: true } : prevRoom);
+
+      if (socket && !p5Instance) {
+        socket.on('send-room', (room: Room) => {
+          setRoom(room);
+  
+          for (let player of room.players) {
+            if (player.id === socket.id) {
+              setMe(player);
+            }
+          }
+  
+          console.log('Room:', room);
+        });
+  
+        socket.emit('get-room', params.id);
+      }
     };
 
     socket.on("game-ended", handleGameEnded);
@@ -467,19 +489,22 @@ export default function Page()
                     </div>
                   )
                 }
-
-                {showScore &&
-                  <div className="flex-col justify-center items-center">
-                    <div
-                      className="relative flex items-center justify-center bg-center bg-cover"
-                      style={{ backgroundImage: "url('score.gif')" }}
-                    />
-                    <div className='text-white font-lg'>
-                      {winner ? thisRoom?.players.find(player => player.id === winner.id)?.userName : "No winner"} has won! With a score of {winner?.score}
-                    </div>
-                  </div>
-                }
               </div>
+            }
+
+            {/* If the game is started, and you can't draw */}
+            {!gameStarted && !canDraw && showScore &&
+              <div className="absolute w-full h-64 md:h-96 bg-gray-800 bg-opacity-50 border border-gray-900 rounded-md mb-4 flex justify-center items-center z-100">
+                <div className="flex-col justify-center items-center">
+                  <div
+                    className="relative w-[124px] h-[124px] flex items-center justify-center bg-center bg-cover"
+                    style={{ backgroundImage: "url('score.gif')" }}
+                  ></div>
+                  <div className='text-white font-lg'>
+                    {/*winnerRef.current ? winnerRef.current.id : "No winner"} has won! With a score of {winnerRef.current?.score ?? 0} points!*/}
+                  </div>
+                </div>
+             </div>
             }
 
             <div ref={hiddenCanvasRef} className="relative top-0 left-0 w-full h-64 md:h-96 bg-transparent z-[-1]" />
@@ -501,7 +526,7 @@ export default function Page()
           )}
 
           {/* Bouton pour lancer la partie */}
-          {!gameStarted && me?.host === true && (
+          {!gameStarted && meRef.current?.host === true && (
             <div className="w-full flex justify-center m-4">
               <button
                 onClick={() => handleStartGame()}

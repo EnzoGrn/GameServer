@@ -26,7 +26,7 @@ export function createRoom(roomId: string, initialPlayer: Player, timestamp: num
     roomSettings: {
       players: 8,
       language: "English",
-      drawTime: 10,
+      drawTime: 80,
       rounds: 3,
       wordCount: 3,
       hints: 2,
