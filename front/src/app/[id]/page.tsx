@@ -18,6 +18,7 @@ import p5 from 'p5';
 // -- Types -- //
 import { Player, Room, Message } from '@/lib/type/types';
 import { MouseData } from '@/lib/type/mouseData';
+import { isDrawing } from '@/lib/player/isDrawing';
 
 export default function Page()
 {
@@ -206,13 +207,12 @@ export default function Page()
     setRoom(room);
   });
 
-  const isDrawing = (player: Player): boolean => {
-    return player.id === thisRoom?.currentDrawer?.id;
-  }
-
   const handleStartGame = () => {
-    if (me?.host == false) return;
-    socket?.emit("start-game", { roomCode: thisRoom?.id });
+    if (me?.host == false)
+      return;
+    socket?.emit("start-game", {
+      roomCode: thisRoom?.id
+    });
   }
 
   useEffect(() => {
@@ -255,18 +255,17 @@ export default function Page()
     if (!socket) return;
 
     const handleWordChosen = ({ currentWord, wordLength }: { currentWord: string, wordLength: number }) => {
-      console.log("word-chosen", wordLength);
-      setIsChoosingWord(false); // Le choix de mot est terminé
-      console.log("CurrentDrawer:", thisRoom?.currentDrawer?.id);
-      console.log("SocketId:", socket.id);
-      if (thisRoom?.currentDrawer?.id !== socket.id) {
-        console.log("Im not the drawer");
-        setRoom((prevRoom) => prevRoom ? { ...prevRoom, currentWord: "_".repeat(wordLength) } : prevRoom); // Affiche un masque du mot
-      } else {
-        console.log("Im the drawer");
-        setRoom((prevRoom) => prevRoom ? { ...prevRoom, currentWord } : prevRoom); // Affiche le mot choisi
-      }
-      console.log("leaving handleWordChosen");
+      setIsChoosingWord(false);
+
+      if (thisRoom?.currentDrawer?.id !== socket.id)
+        setRoom((prevRoom) => prevRoom ? { ...prevRoom, currentWord: "_".repeat(wordLength) } : prevRoom);
+      else
+        setRoom((prevRoom) => prevRoom ? { ...prevRoom, currentWord } : prevRoom);
+
+      if (me?.id === thisRoom?.currentDrawer?.id)
+        setGameState('drawing');
+      else
+        setGameState('guessing');
     };
 
     socket.on("word-chosen", handleWordChosen);
@@ -280,11 +279,6 @@ export default function Page()
     socket?.emit("word-chosen", { roomId: thisRoom?.id, word });
 
     setIsChoosingWord(false);
-
-    if (me?.id === thisRoom?.currentDrawer?.id)
-      setGameState('drawing');
-    else
-      setGameState('guessing');
   };
 
   useEffect(() => {
@@ -389,51 +383,39 @@ export default function Page()
         {/* Zone de dessin */}
         <div className="flex-1 p-4 flex flex-col items-center order-1 md:order-2">
 
-          {/* Bouton pour lancer la partie */}
-          {!renderPlay && (
-            <div className="w-full flex justify-center m-4">
-              <button
-                onClick={() => handleStartGame()}
-                className="bg-green-500 hover:bg-green-600 text-white px-6 py-2 rounded-md text-lg"
-              >
-                Lancer la partie
-              </button>
-            </div>
-          )}
-
-          {/* Choix du mot */}
-          {isChoosingWord && (
-            isDrawing(me!) ? (
-              <div className="w-full flex justify-center m-4">
-                {wordList?.map((word) => (
-                  <button
-                    key={word?.id}
-                    onClick={() => chooseWord(word?.text)}
-                    className="bg-blue-500 hover:bg-blue-600 text-white px-6 py-2 rounded-md text-lg mr-4"
-                  >
-                    {word?.text}
-                  </button>
-                ))}
-              </div>
-            ) : (
-              <div className="w-full flex justify-center m-4">
-                <div className="bg-blue-500 text-white px-6 py-2 rounded-md text-lg">
-                  {thisRoom?.currentDrawer?.userName} is choosing a word
-                </div>
-              </div>
-            )
-          )}
-
           {/* Canvas */}
           <div className="relative w-full">
             <div ref={canvasParentRef} className="absolute w-full h-64 md:h-96 bg-white border border-gray-300 rounded-md mb-4" />
 
-            {isChoosingWord &&
-              <div className="absolute w-full h-64 md:h-96 bg-gray-500 bg-opacity-50 border border-gray-400 rounded-md mb-4">
+            {!renderPlay &&
+              <div className="absolute w-full h-64 md:h-96 bg-gray-500 bg-opacity-50 border border-gray-400 rounded-md mb-4 flex justify-center items-center z-100">
+                {isChoosingWord && isDrawing(me!, thisRoom?.currentDrawer!) ?
+                  (
+                    <div className="flex-col justify-center items-center">
+                      <div className='text-white font-bold text-lg text-center'>
+                        Choose a word
+                      </div>
+                      <div className="w-full flex justify-center m-4">
+                        {wordList?.map((word) => (
+                          <button
+                            key={word?.id} onClick={() => chooseWord(word?.text)}
+                            className="bg-white hover:bg-slate-100 text-gray-800 px-6 py-2 rounded-md text-lg mr-4"
+                          >
+                            {word?.text}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className='text-white font-lg'>
+                      {thisRoom?.currentDrawer?.userName} is choosing the word!
+                    </div>
+                  )
+                }
               </div>
             }
 
-            <div ref={hiddenCanvasRef} className="relative top-0 left-0 w-full h-64 md:h-96 bg-transparent z-0" />
+            <div ref={hiddenCanvasRef} className="relative top-0 left-0 w-full h-64 md:h-96 bg-transparent z-[-1]" />
           </div>
 
           {/* Contrôles pour les outils */}
@@ -458,6 +440,18 @@ export default function Page()
                 className="bg-red-400 px-3 md:px-4 py-1 md:py-2 rounded-md text-white"
               >
                 Réinitialiser
+              </button>
+            </div>
+          )}
+
+          {/* Bouton pour lancer la partie */}
+          {!renderPlay && (
+            <div className="w-full flex justify-center m-4">
+              <button
+                onClick={() => handleStartGame()}
+                className="bg-green-500 hover:bg-green-600 text-white px-6 py-2 rounded-md text-lg font-extrabold"
+              >
+                Start!
               </button>
             </div>
           )}
