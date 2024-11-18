@@ -348,6 +348,8 @@ export default function Page()
 
     const handleYouGuessed = () => {
       console.log("You guessed the word!");
+
+      setGameState("guess");
     };
 
     socket.on("you-guessed", handleYouGuessed);
@@ -450,7 +452,7 @@ export default function Page()
       {/* Header */}
       <div className="w-full bg-[#f37b78] text-white p-4 flex justify-between items-center border-b-2 border-b-[#c44b4a]">
         <Clock time={timeLeft} />
-        <WordDisplay gameState={gameState} word={thisRoom?.currentWord.toLowerCase()} guessedPlayers={thisRoom?.guessedPlayers} />
+        <WordDisplay gameState={gameState} word={thisRoom?.currentWord.toLowerCase()} />
         <Round currentRound={thisRoom?.currentRound} totalRounds={thisRoom?.roomSettings.rounds} />
       </div>
 
@@ -462,6 +464,7 @@ export default function Page()
 
         {/* Zone de dessin */}
         <div className="flex-1 p-4 flex flex-col items-center order-1 md:order-2">
+
           {/* Bouton pour lancer la partie */}
           {!renderPlay && (
             <div className="w-full flex justify-center m-4">
@@ -500,6 +503,12 @@ export default function Page()
           {/* Canvas */}
           <div className="relative w-full">
             <div ref={canvasParentRef} className="absolute w-full h-64 md:h-96 bg-white border border-gray-300 rounded-md mb-4" />
+
+            {isChoosingWord &&
+              <div className="absolute w-full h-64 md:h-96 bg-gray-500 bg-opacity-50 border border-gray-400 rounded-md mb-4">
+              </div>
+            }
+
             <div ref={hiddenCanvasRef} className="relative top-0 left-0 w-full h-64 md:h-96 bg-transparent z-0" />
           </div>
 
