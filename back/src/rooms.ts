@@ -17,7 +17,7 @@ export function createRoom(roomId: string, initialPlayer: Player, timestamp: num
     }],
     customWords: [],
     guessedPlayers: [],
-    currentWord: "",
+    currentWord: null,
     currentDrawer: null,
     currentDrawerIndex: 0,
     currentRound: 0,

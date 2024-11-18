@@ -30,8 +30,12 @@ export default function Page()
   socket?.on('room-data-updated', ({ room }: { room: Room }) => {
     if (room) {
       console.log('Room updated:', room);
-
       setRoom(room);
+      for (let player of room.players) {
+        if (player.id === socket.id) {
+          setMe(player);
+        }
+      }
     }
   });
 
@@ -200,7 +204,7 @@ export default function Page()
 
   // -- Word List -- //
   const [wordList      , setWordList]       = useState<{ id: number, text: string }[]>([]);
-  const [isChoosingWord, setIsChoosingWord] = useState<boolean>(false); 
+  const [isChoosingWord, setIsChoosingWord] = useState<boolean>(false);
 
   const isChoosingWordRef = useRef<boolean>(isChoosingWord);
 
@@ -282,6 +286,20 @@ export default function Page()
       socket.off("choose-word", handleChooseWord);
     };
   }, [socket]);
+
+  useEffect(() => {
+    if (!socket)
+      return;
+    const handleNewMessage = ({ messages }: { messages: Message[] }) => {
+      setRoom((prevRoom) => prevRoom ? { ...prevRoom, messages } : prevRoom);
+    }
+
+    socket.on("new-message", handleNewMessage);
+
+    return () => {
+      socket.off("new-message", handleNewMessage);
+    };
+  }, [socket, thisRoom]);
 
   useEffect(() => {
     if (!socket)
@@ -379,7 +397,7 @@ export default function Page()
   // -- Tools -- //
 
   const [tool, setTool] = useState<'pencil' | 'eraser'>('pencil'); // Outil actif
-  const [strokeWidth, setStrokeWidth] = useState(4); // Épaisseur du trait  
+  const [strokeWidth, setStrokeWidth] = useState(4); // Épaisseur du trait
 
   return (
     <div className="flex flex-col min-h-screen w-full">
@@ -387,7 +405,7 @@ export default function Page()
       {/* Header */}
       <div className="w-full bg-[#f37b78] text-white p-4 flex justify-between items-center border-b-2 border-b-[#c44b4a]">
         <Clock time={timeLeft} />
-        <WordDisplay gameState={gameState} word={thisRoom?.currentWord.toLowerCase()} />
+        <WordDisplay gameState={gameState} word={thisRoom?.currentWord?.toLowerCase()} />
         <Round currentRound={thisRoom?.currentRound} totalRounds={thisRoom?.roomSettings.rounds} />
       </div>
 
