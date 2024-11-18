@@ -18,6 +18,7 @@ import p5 from 'p5';
 // -- Types -- //
 import { Player, Room, Message } from '@/lib/type/types';
 import { MouseData } from '@/lib/type/mouseData';
+import { isDrawing } from '@/lib/player/isDrawing';
 
 export default function Page()
 {
@@ -206,10 +207,6 @@ export default function Page()
     setRoom(room);
   });
 
-  const isDrawing = (player: Player): boolean => {
-    return player.id === thisRoom?.currentDrawer?.id;
-  }
-
   const handleStartGame = () => {
     if (me?.host == false)
       return;
@@ -256,11 +253,13 @@ export default function Page()
   useEffect(() => {
     if (!socket) return;
 
-    const handleWordChosen = ({ wordLength }: { wordLength: number }) => {
+    const handleWordChosen = ({ currentWord, wordLength }: { currentWord: string, wordLength: number }) => {
       setIsChoosingWord(false);
 
       if (thisRoom?.currentDrawer?.id !== socket.id)
         setRoom((prevRoom) => prevRoom ? { ...prevRoom, currentWord: "_".repeat(wordLength) } : prevRoom);
+      else
+        setRoom((prevRoom) => prevRoom ? { ...prevRoom, currentWord } : prevRoom);
 
       if (me?.id === thisRoom?.currentDrawer?.id)
         setGameState('drawing');
@@ -383,52 +382,39 @@ export default function Page()
         {/* Zone de dessin */}
         <div className="flex-1 p-4 flex flex-col items-center order-1 md:order-2">
 
-          {/* Choix du mot */}
-          {isChoosingWord && (
-            isDrawing(me!) ? (
-              <div className="w-full flex justify-center m-4">
-                {wordList?.map((word) => (
-                  <button
-                    key={word?.id}
-                    onClick={() => chooseWord(word?.text)}
-                    className="bg-blue-500 hover:bg-blue-600 text-white px-6 py-2 rounded-md text-lg mr-4"
-                  >
-                    {word?.text}
-                  </button>
-                ))}
-              </div>
-            ) : (
-              <div className="w-full flex justify-center m-4">
-                <div className="bg-blue-500 text-white px-6 py-2 rounded-md text-lg">
-                  {thisRoom?.currentDrawer?.userName} is choosing a word
-                </div>
-              </div>
-            )
-          )}
-
           {/* Canvas */}
           <div className="relative w-full">
             <div ref={canvasParentRef} className="absolute w-full h-64 md:h-96 bg-white border border-gray-300 rounded-md mb-4" />
 
             {!renderPlay &&
-              <div className="absolute w-full h-64 md:h-96 bg-gray-500 bg-opacity-50 border border-gray-400 rounded-md mb-4">
-                {/* TODO: Implement settings edition */}
+              <div className="absolute w-full h-64 md:h-96 bg-gray-500 bg-opacity-50 border border-gray-400 rounded-md mb-4 flex justify-center items-center z-100">
+                {isChoosingWord && isDrawing(me!, thisRoom?.currentDrawer!) ?
+                  (
+                    <div className="flex-col justify-center items-center">
+                      <div className='text-white font-bold text-lg text-center'>
+                        Choose a word
+                      </div>
+                      <div className="w-full flex justify-center m-4">
+                        {wordList?.map((word) => (
+                          <button
+                            key={word?.id} onClick={() => chooseWord(word?.text)}
+                            className="bg-white hover:bg-slate-100 text-gray-800 px-6 py-2 rounded-md text-lg mr-4"
+                          >
+                            {word?.text}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className='text-white font-lg'>
+                      {thisRoom?.currentDrawer?.userName} is choosing the word!
+                    </div>
+                  )
+                }
               </div>
             }
 
-            {isChoosingWord &&
-              <div className="absolute w-full h-64 md:h-96 bg-gray-500 bg-opacity-50 border border-gray-400 rounded-md mb-4 flex justify-center items-center">
-                {isDrawing(me!) ? (
-                  <>Choose a word</>
-                ) : (
-                  <div className='text-white font-lg'>
-                    {thisRoom?.currentDrawer?.userName} is choosing the word!
-                  </div>
-                )}
-              </div>
-            }
-
-            <div ref={hiddenCanvasRef} className="relative top-0 left-0 w-full h-64 md:h-96 bg-transparent z-0" />
+            <div ref={hiddenCanvasRef} className="relative top-0 left-0 w-full h-64 md:h-96 bg-transparent z-[-1]" />
           </div>
 
           {/* Contrôles pour les outils */}

@@ -391,7 +391,8 @@ export function setupSocket(io: Server) {
       // Assigner le mot et informer les autres joueurs
       room.currentWord = word;
       console.log("Word chosen:", word);
-      io.to(roomId).emit("word-chosen", { wordLength: word.length });
+      io.to(roomId).emit("word-chosen", { currentWord: word, wordLength: word.length });
+
 
       startDrawingTimer(roomId);
     });
