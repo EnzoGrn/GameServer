@@ -166,27 +166,32 @@ export default function Home()
   }
 
   return (
-    <main className="flex flex-col items-center justify-center min-h-screen text-base-content px-4">
+    <main className="flex flex-col items-center justify-center min-h-screen px-4 py-8">
 
       {/* Title of the game */}
-      <Title title={"Draw'IT Together"} />
-
+      <Title title="Draw'It Together" />
+  
       {/* Main Section */}
-      <div className="w-full p-6 bg-white rounded-lg shadow-md">
+      <div className="w-full max-w-md p-6 bg-white rounded-lg shadow-lg space-y-6">
 
         {/* Label Section */}
         <div className="w-full flex flex-row justify-between items-center gap-2">
           <LabelBlock blockName="Player Name">
             <input
-              type="text" value={playerName} onChange={(e) => OnPlayerNameChange(e.target.value)} maxLength={15}
-              placeholder="Enter your name" className="w-full p-2 mb-4 border border-gray-300 rounded-md"
+              type="text"
+              value={playerName}
+              onChange={(e) => OnPlayerNameChange(e.target.value)}
+              placeholder="Enter your name"
+              maxLength={15}
+              className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#f37b78] focus:outline-none"
             />
           </LabelBlock>
 
           <LabelBlock blockName="Language">
             <select
-              value={language} onChange={(e) => OnLanguageChange(e.target.value)}
-              className="w-full p-2 mb-4 border border-gray-300 rounded-md"
+              value={language}
+              onChange={(e) => OnLanguageChange(e.target.value)}
+              className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#f37b78] focus:outline-none"
             >
               <option value="English">English</option>
               {/* -- Add more option */}
@@ -194,13 +199,21 @@ export default function Home()
           </LabelBlock>
         </div>
 
-        <button onClick={join} className="w-full bg-green-500 hover:bg-green-600 text-white py-3 font-bold text-[2rem] rounded-md">
-          Play!
-        </button>
+        <div className="space-y-2">
+          <button
+            onClick={join}
+            className="w-full bg-green-500 hover:bg-green-600 text-white py-3 text-xl font-bold rounded-md transition-all"
+          >
+            Play!
+          </button>
 
-        <button onClick={createRoom} className="w-full mt-4 bg-blue-500 hover:bg-blue-600 font-bold text-white py-2 text-[1rem] rounded-md">
-          Create Private Room
-        </button>
+          <button
+            onClick={createRoom}
+            className="w-full bg-blue-500 hover:bg-blue-600 text-white py-2 rounded-md font-medium transition-all"
+          >
+            Create Private Room
+          </button>
+        </div>
       </div>
     </main>
   );
