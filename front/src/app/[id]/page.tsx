@@ -24,6 +24,7 @@ export default function Page()
 {
   // -- The socket -- //
   const { socket } = useSocket();
+  const roomRef    = useRef<Room | null>(null);
   const [thisRoom, setRoom] = useState<Room | null>(null);
 
   socket?.on('room-data-updated', ({ room }: { room: Room }) => {
@@ -54,7 +55,7 @@ export default function Page()
   const [p5Instance, setP5Instance] = useState<p5 | null>(null);
 
   useSafeEffect(() => {
-    if (socket) {
+    if (socket && !p5Instance) {
       socket.on('send-room', (room: Room) => {
         setRoom(room);
 
@@ -70,7 +71,7 @@ export default function Page()
       socket.emit('get-room', params.id);
     }
 
-    if (canvasParentRef.current && socket) {
+    if (canvasParentRef.current && socket && !p5Instance) {
       console.log('Creating P5 instance...');
 
       setP5Instance(new p5((p: p5) => sketch(p, socket), canvasParentRef.current));
@@ -79,7 +80,11 @@ export default function Page()
     return () => {
       p5Instance?.remove();
     };
-  }, []);
+  }, [thisRoom, socket]);
+
+  useEffect(() => {
+    roomRef.current = thisRoom;
+  }, [thisRoom]);
 
   const sketch = (p: p5, socket: Socket) => {
     p.setup = () => {
@@ -91,8 +96,10 @@ export default function Page()
 
         canvas.parent(canvasParentRef.current);
 
-        // Écoute des dessins des autres utilisateurs
         socket.on('mouse', (data: MouseData) => {
+          if (socket?.id === data?.senderId)
+            return;
+
           p.stroke(data.color);
           p.strokeWeight(data.strokeWidth);
           p.line(data.x, data.y, data.px, data.py);
@@ -101,8 +108,14 @@ export default function Page()
     };
 
     p.mouseDragged = () => {
-      //if (socket?.id !== thisRoom?.currentDrawer?.id)
-      //  return; // Bloque le dessin si ce n'est pas leur tour
+      const room: Room | null     = roomRef.current;
+      const draw: boolean         = canDrawRef.current;
+      const choosingWord: boolean = isChoosingWordRef.current;
+
+      if (!draw || choosingWord || !room || !socket)
+        return;
+      if (room?.currentDrawer?.id !== socket.id)
+        return;
       const x  = p.mouseX;
       const y  = p.mouseY;
       const px = p.pmouseX;
@@ -116,11 +129,12 @@ export default function Page()
         py,
         color: tool === 'eraser' ? '#FFFFFF' : '#000000',
         strokeWidth: tool === 'eraser' ? strokeWidth * 2 : strokeWidth,
+        senderId: socket.id || '',
+        roomCode: room?.id || '',
       };
 
       socket.emit('mouse', data);
 
-      // Dessine localement aussi
       p.stroke(data.color);
       p.strokeWeight(data.strokeWidth);
       p.line(data.x, data.y, data.px, data.py);
@@ -188,11 +202,23 @@ export default function Page()
   const [wordList      , setWordList]       = useState<{ id: number, text: string }[]>([]);
   const [isChoosingWord, setIsChoosingWord] = useState<boolean>(false); 
 
+  const isChoosingWordRef = useRef<boolean>(isChoosingWord);
+
+  useEffect(() => {
+    isChoosingWordRef.current = isChoosingWord;
+  }, [isChoosingWord]);
+
   // -- Game State -- //
   const [gameState  , setGameState]   = useState<GameState>('waiting');
   const [gameStarted, setGameStarted] = useState<boolean>(false);
   const [canDraw    , setCanDraw]     = useState<boolean>(false);
   const [timeLeft   , setTimeLeft]    = useState<number>(0);
+
+  const canDrawRef = useRef<boolean>(canDraw);
+
+  useEffect(() => {
+    canDrawRef.current = canDraw;
+  }, [canDraw]);
 
   /*
    * @brief Callback of the started button for launching the game
@@ -217,6 +243,8 @@ export default function Page()
       setTimeLeft(thisRoom?.roomSettings?.drawTime || 60);
       setCanDraw(false);
       setGameStarted(true);
+
+      clearCanvas();
     };
 
     socket.on("turn-started", handleTurnStarted);
@@ -380,14 +408,14 @@ export default function Page()
 
             {/* If the game is not start */}
             {!gameStarted &&
-              <div className="absolute w-full h-64 md:h-96 bg-gray-500 bg-opacity-50 border border-gray-400 rounded-md mb-4 flex justify-center items-center z-100">
+              <div className="absolute w-full h-64 md:h-96 bg-gray-800 bg-opacity-50 border border-gray-900 rounded-md mb-4 flex justify-center items-center z-100">
                 {/* Settings of the game */}
               </div>
             }
 
             {/* If the game is started, and you can't draw */}
             {gameStarted && !canDraw &&
-              <div className="absolute w-full h-64 md:h-96 bg-gray-500 bg-opacity-50 border border-gray-400 rounded-md mb-4 flex justify-center items-center z-100">
+              <div className="absolute w-full h-64 md:h-96 bg-gray-800 bg-opacity-50 border border-gray-900 rounded-md mb-4 flex justify-center items-center z-100">
                 {isChoosingWord && isDrawing(me!, thisRoom?.currentDrawer!) ?
                   (
                     <div className="flex-col justify-center items-center">

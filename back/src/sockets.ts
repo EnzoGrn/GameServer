@@ -253,7 +253,13 @@ export function setupSocket(io: Server) {
       io.to(roomCode).emit("room-data-updated", { room: rooms[roomCode] });
     });
 
-    socket.on('mouse', (data) => socket.broadcast.emit('mouse', data));
+    socket.on('mouse', (data) => {
+      const room = rooms[data.roomCode];
+
+      if (!room || room.currentDrawer.id !== socket.id)
+        return;
+      socket.broadcast.emit('mouse', data);
+    });
 
     socket.on('clear-canvas', () => {
       socket.broadcast.emit('clear-canvas');

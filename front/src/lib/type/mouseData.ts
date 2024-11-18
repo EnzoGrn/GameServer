@@ -8,4 +8,6 @@ export interface MouseData {
   py         : number;
   color      : string;
   strokeWidth: number;
+  senderId   : string;
+  roomCode   : string;
 };
