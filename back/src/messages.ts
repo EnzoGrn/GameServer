@@ -55,25 +55,39 @@ export function addDisconnectMessage(room: Room, userName: string) {
 export function addChangeHostMessage(room: Room, userName: string) {
   const changeHostMessage: Message = {
     text: `${userName} is now the room owner!`,
-    timestamp: Date.now(),
+    timestamp: 0,
     bgColor: "white",
     color: "orange",
   };
-  room?.messages?.push(changeHostMessage);
+  if (room && room.messages) {
+    // Search the message with timestamp 0 and replace it with the new message
+    const index = room.messages.findIndex((message) => message.timestamp === 0);
+    if (index !== -1) {
+      room.messages[index] = changeHostMessage;
+    } else {
+      room.messages.push(changeHostMessage);
+    }
+  }
 }
 
 export function checkMessage(room: Room, player: Player, message: string): boolean{
   if (message === room?.currentWord && !player.hasGuessed && player.id !== room?.currentDrawer.id) {
+    console.log("word guessed");
     room?.guessedPlayers.push(player);
     console.log(room?.guessedPlayers);
     player.hasGuessed = true;
     addGuessedMessage(room, player.userName);
     return true;
   } else {
+    console.log("word not guessed");
+    console.log("player.hasGuessed", player.hasGuessed);
+    console.log("player.id", player.id);
+    console.log("room?.currentDrawer.id", room?.currentDrawer.id);
     if (!player.hasGuessed && player.id !== room?.currentDrawer?.id) {
       const distance = levenshteinDistance(message, room?.currentWord);
 
-      if (distance < 2) {
+      console.log("distance", distance);
+      if (distance < 2 && distance > 0) {
         const almostCorrectMessage: Message = {
           text: message + " is close!",
           timestamp: Date.now(),
@@ -84,8 +98,8 @@ export function checkMessage(room: Room, player: Player, message: string): boole
         };
         room?.messages?.push(almostCorrectMessage);
       }
-      addMessage(room, player.userName, message);
     }
+    addMessage(room, player.userName, message);
   }
   return false;
 }

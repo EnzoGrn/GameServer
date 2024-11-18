@@ -183,7 +183,7 @@ export function setupSocket(io: Server) {
 
             addChangeHostMessage(room, randomPlayer.userName);
           }
-          io.to(room.id).emit("player-disconnected");
+          io.to(room.id).emit("room-data-updated", { room });
         }
       }
     });
@@ -284,11 +284,12 @@ export function setupSocket(io: Server) {
       const room = rooms[roomCode];
       const player = room?.players?.find((player) => player.id === socket.id);
       if (room && player) {
-        if (checkMessage(room, player, message)) {
+        console.log("Message received from:", player.userName, "in room:", roomCode);
+        if (checkMessage(room, player, message) === true) {
           socket.emit("you-guessed", { room });
         }
 
-        io.to(roomCode).emit("room-data-updated", { room });
+        io.to(roomCode).emit("new-message", { messages: room.messages });
       }
     });
 
@@ -373,6 +374,7 @@ export function setupSocket(io: Server) {
       });
 
       room.currentDrawerIndex = (room.currentDrawerIndex + 1) % room.players.length;
+      room.currentDrawer = room.players[room.currentDrawerIndex];
       if (room.currentDrawerIndex === room.players.length - 1) {
         room.currentRound += 1;
         if (room.currentRound > room.roomSettings.rounds) {
