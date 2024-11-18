@@ -81,7 +81,7 @@ export default function Page()
         const canvas            = p.createCanvas(width, height);
 
         canvas.parent(canvasParentRef.current);
-  
+
         // Écoute des dessins des autres utilisateurs
         socket.on('mouse', (data: MouseData) => {
           p.stroke(data.color);
@@ -218,33 +218,79 @@ export default function Page()
     if (me?.host == false) return;
 
     socket?.emit("start-game", { roomCode: thisRoom?.id });
-
-    playTurn();
+    // playTurn();
   }
 
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleTurnStarted = ({ drawer, round }: { drawer: Player; round: number }) => {
+      console.log("Turn started:", drawer, round);
+      setRoom((prevRoom) => prevRoom ? { ...prevRoom, currentDrawer: drawer, currentRound: round } : prevRoom);
+      setTimeLeft(thisRoom?.roomSettings?.drawTime || 60); // Initialiser le timer
+      setIsChoosingWord(socket.id === drawer.id); // Si c'est mon tour, je choisis un mot
+      console.log("leaving handleTurnStarted");
+    };
+
+    socket.on("turn-started", handleTurnStarted);
+
+    return () => {
+      socket.off("turn-started", handleTurnStarted);
+    };
+  }, [socket, thisRoom]);
+
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleChooseWord = ({ words }: { words: { id: number, text: string }[] }) => {
+      console.log("choose-word", words);
+      setWordList(words);
+      setIsChoosingWord(true);
+      console.log("leaving handleChooseWord");
+    };
+
+    socket.on("choose-word", handleChooseWord);
+
+    return () => {
+      socket.off("choose-word", handleChooseWord);
+    };
+  }, [socket]);
+
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleWordChosen = ({ wordLength }: { wordLength: number }) => {
+      console.log("word-chosen", wordLength);
+      setIsChoosingWord(false); // Le choix de mot est terminé
+      setRoom((prevRoom) => prevRoom ? { ...prevRoom, currentWord: "_".repeat(wordLength) } : prevRoom); // Affiche un masque du mot
+      console.log("leaving handleWordChosen");
+    };
+
+    socket.on("word-chosen", handleWordChosen);
+
+    return () => {
+      socket.off("word-chosen", handleWordChosen);
+    };
+  }, [socket]);
+
+
+
   const playTurn = () => {
-    getWordList();
+    // getWordList();
   };
 
-  socket?.on("send-word-list", ({ selectedWords }: { selectedWords: { id: number, text: string }[] }) => {
-    setWordList(selectedWords);
-    setIsChoosingWord(true);
+  // socket?.on("send-word-list", ({ selectedWords }: { selectedWords: { id: number, text: string }[] }) => {
+  //   setWordList(selectedWords);
+  //   setIsChoosingWord(true);
+  // });
 
-    if (me?.id === thisRoom?.currentDrawer?.id)
-      setGameState('choose');
-    else
-      setGameState('waiting');
-  });
-
-  const getWordList = () => {
-    socket?.emit("get-word-list", { roomCode: thisRoom?.id });
-
-    setIsChoosingWord(true);
-  };
+  // const getWordList = () => {
+  //   socket?.emit("get-word-list", { roomCode: thisRoom?.id });
+  //   setIsChoosingWord(true);
+  // };
 
   const chooseWord = (word: string) => {
-    socket?.emit("word-chosen", { roomCode: thisRoom?.id, word });
-
+    socket?.emit("word-chosen", { roomId: thisRoom?.id, word });
     setIsChoosingWord(false);
   };
 
@@ -267,11 +313,11 @@ export default function Page()
           let interval = setInterval(() => {
           setTimeLeft((prev) => {
             console.log('Time left:', prev);
-            console.log('Guessed players:', room?.guessedPlayers?.length);
-
-            if (prev <= 1 || room?.guessedPlayers?.length === room.players.length - 1) {
+            console.log('Guessed players:', room.guessedPlayers.length);
+            if (prev <= 1) {
               clearInterval(interval); // Stop the interval
-              socket.emit('end-turn', { roomCode: room.id }); // Utilisez les données à jour
+              if (me?.host)
+                socket.emit('end-turn', { roomCode: room.id }); // Utilisez les données à jour
               return 0;
             }
             return prev - 1;
@@ -289,31 +335,116 @@ export default function Page()
     };
   }, [socket, me]);
 
+  // useEffect(() => {
+  //   socket?.on("you-guessed", ({ room }: { room: Room }) => {
+  //     setRoom(room);
+  //     console.log("you-guessed", socket?.id);
+  //     socket?.emit("player-guessed", { roomCode: room?.id, playerId: socket?.id });
+  //   });
+  // }, [socket]);
+
   useEffect(() => {
-    socket?.on("you-guessed", ({ room }: { room: Room }) => {
-      setRoom(room);
-      console.log("you-guessed", socket?.id);
-      socket?.emit("player-guessed", { roomCode: room?.id, playerId: socket?.id });
-    });
+    if (!socket) return;
+
+    const handleYouGuessed = () => {
+      console.log("You guessed the word!");
+
+      setGameState("guess");
+    };
+
+    socket.on("you-guessed", handleYouGuessed);
+
+    return () => {
+      socket.off("you-guessed", handleYouGuessed);
+    };
   }, [socket]);
 
   useEffect(() => {
-    socket?.on("next-turn", ({ room }: { room: Room }) => {
-      console.log("next-turn", room.currentDrawer, room.currentRound, room.timeLeft);
-      setRoom((prevRoom) => prevRoom ? ({
-        ...prevRoom,
-        currentDrawer: room.currentDrawer,
-        currentRound: room.currentRound,
-        timeLeft: room.timeLeft,
-      }) : prevRoom);
-      setIsChoosingWord(true);
-      getWordList();
-    });
+    if (!socket) return;
+
+    const handleTimerUpdate = ({ timeLeft }: { timeLeft: number }) => {
+      console.log("Timer update:", timeLeft);
+      setTimeLeft(timeLeft);
+    };
+
+    socket.on("timer-update", handleTimerUpdate);
 
     return () => {
-      socket?.off("next-turn");
+      socket.off("timer-update", handleTimerUpdate);
     };
-  }, [socket, thisRoom]);
+  }, [socket]);
+
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleTurnEnded = ({
+      scores,
+      word,
+      guessedPlayers,
+    }: {
+      scores: { [playerId: string]: number };
+      word: string;
+      guessedPlayers: string[];
+    }) => {
+      setRoom((prevRoom) =>
+        prevRoom
+          ? { ...prevRoom, scores, currentWord: word, guessedPlayers: prevRoom.players.filter(player => guessedPlayers.includes(player.id)) }
+          : prevRoom
+      );
+      console.log("Turn ended:", word, guessedPlayers);
+    };
+
+    socket.on("turn-ended", handleTurnEnded);
+
+    return () => {
+      socket.off("turn-ended", handleTurnEnded);
+    };
+  }, [socket]);
+
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleGameEnded = ({
+      winner,
+      scores,
+    }: {
+      winner: { id: string; score: number };
+      scores: { [playerId: string]: number };
+    }) => {
+      console.log("Game ended. Winner:", winner);
+      setRoom((prevRoom) =>
+        prevRoom
+          ? { ...prevRoom, scores, gameEnded: true }
+          : prevRoom
+      );
+    };
+
+    socket.on("game-ended", handleGameEnded);
+
+    return () => {
+      socket.off("game-ended", handleGameEnded);
+    };
+  }, [socket]);
+
+
+
+  // useEffect(() => {
+  //   socket?.on("next-turn", ({ room }: { room: Room }) => {
+  //     console.log("next-turn", room.currentDrawer, room.currentRound, room.timeLeft);
+  //     setRoom((prevRoom) => prevRoom ? ({
+  //       ...prevRoom,
+  //       currentDrawer: room.currentDrawer,
+  //       currentRound: room.currentRound,
+  //       timeLeft: room.timeLeft,
+  //     }) : prevRoom);
+  //     setIsChoosingWord(true);
+  //     getWordList();
+  //   });
+
+  //   return () => {
+  //     socket?.off("next-turn");
+  //   };
+  // }, [socket]);
 
   return (
     <div className="flex flex-col min-h-screen w-full">
@@ -321,8 +452,8 @@ export default function Page()
       {/* Header */}
       <div className="w-full bg-[#f37b78] text-white p-4 flex justify-between items-center border-b-2 border-b-[#c44b4a]">
         <Clock time={timeLeft} />
-        <WordDisplay gameState={gameState} word={thisRoom?.currentWord.toLowerCase()} guessedPlayers={thisRoom?.guessedPlayers} />
-        <Round currentRound={thisRoom?.currentRound} totalRounds={thisRoom?.roomSettings.rounds} /> 
+        <WordDisplay gameState={gameState} word={thisRoom?.currentWord.toLowerCase()} />
+        <Round currentRound={thisRoom?.currentRound} totalRounds={thisRoom?.roomSettings.rounds} />
       </div>
 
       {/* Main Section */}
@@ -350,13 +481,13 @@ export default function Page()
           {isChoosingWord && (
             isDrawing(me!) ? (
               <div className="w-full flex justify-center m-4">
-                {wordList.map((word) => (
+                {wordList?.map((word) => (
                   <button
-                    key={word.id}
-                    onClick={() => chooseWord(word.text)}
+                    key={word?.id}
+                    onClick={() => chooseWord(word?.text)}
                     className="bg-blue-500 hover:bg-blue-600 text-white px-6 py-2 rounded-md text-lg mr-4"
                   >
-                    {word.text}
+                    {word?.text}
                   </button>
                 ))}
               </div>

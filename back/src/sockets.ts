@@ -268,8 +268,10 @@ export function setupSocket(io: Server) {
       }
       room.gameStarted = true;
       room.currentDrawer = room.players[room.players.length - 1];
+      room.currentDrawerIndex = room.players.length - 1;
       room.currentRound = 1;
-      io.to(roomCode).emit("game-started", { room });
+      // io.to(roomCode).emit("game-started", { room });
+      startTurn(roomCode);
     });
 
     socket.on("message-sent", ({ roomCode, message }) => {
@@ -296,15 +298,15 @@ export function setupSocket(io: Server) {
       io.to(roomCode).emit("send-word-list", { selectedWords });
     });
 
-    socket.on("word-chosen", ({ roomCode, word }) => {
-      const room = rooms[roomCode];
-      if (!room) {
-        return console.error("Room not found:", roomCode);
-      }
+    // socket.on("word-chosen", ({ roomCode, word }) => {
+    //   const room = rooms[roomCode];
+    //   if (!room) {
+    //     return console.error("Room not found:", roomCode);
+    //   }
 
-      room.currentWord = word;
-      io.to(roomCode).emit('start-timer', { room });
-    });
+    //   room.currentWord = word;
+    //   io.to(roomCode).emit('start-timer', { room });
+    // });
 
     socket.on("end-turn", ({ roomCode }) => {
       console.log("Ending turn for room:", roomCode);
@@ -322,7 +324,7 @@ export function setupSocket(io: Server) {
       console.log("Next drawer:", room.currentDrawer.userName);
 
       // Incrémenter le round si on revient au premier joueur
-      if (currentIndex === room.players.length - 1) {
+      if (nextIndex === room.players.length - 1) {
         room.currentRound++;
       }
 
@@ -371,5 +373,110 @@ export function setupSocket(io: Server) {
     //   console.log("Game ended for room:", roomCode);
     //   io.to(roomCode).emit("room-data-updated", { room });
     // });
+    socket.on("word-chosen", ({ roomId, word }) => {
+      const room = rooms[roomId];
+      if (!room) {
+        console.error("Room not found:", roomId);
+        return;
+      }
+
+      const currentDrawer = room.players[room.currentDrawerIndex];
+      console.log("Word chosen received from:", socket.id, "Expected drawer:", currentDrawer.id);
+
+      if (socket.id !== currentDrawer.id) {
+        console.error("Unauthorized word selection attempt by:", socket.id);
+        return;
+      }
+
+      // Assigner le mot et informer les autres joueurs
+      room.currentWord = word;
+      console.log("Word chosen:", word);
+      io.to(roomId).emit("word-chosen", { wordLength: word.length });
+
+      startDrawingTimer(roomId);
+    });
+
+    function startTurn(roomId: string) {
+      console.log("Starting turn for room:", roomId);
+      const room = rooms[roomId];
+
+      const currentDrawer = room.players[room.currentDrawerIndex];
+      io.to(roomId).emit("turn-started", { drawer: currentDrawer, round: room.currentRound });
+
+      // Le dessinateur choisit un mot
+      const wordOptions =  selectWords(room);
+      console.log("Word options:", wordOptions);
+      io.to(currentDrawer.id).emit("choose-word", { words: wordOptions });
+
+      // Enregistrer le mot choisi
+      // socket.on("word-chosen", ({ word }) => {
+      //   console.log("Word chosen:", word);
+      //   console.log("Current drawer:", currentDrawer.id);
+      //   if (socket.id !== currentDrawer.id) return;
+
+      //   room.currentWord = word;
+      //   console.log("Word chosen:", word);
+      //   io.to(roomId).emit("word-chosen", { wordLength: word.length });
+
+      //   startDrawingTimer(roomId);
+      // });
+    }
+
+    function startDrawingTimer(roomId: string) {
+      const room = rooms[roomId];
+      let timeLeft = room.roomSettings.drawTime;
+
+      console.log("Starting drawing timer for room:", roomId);
+      console.log("Time left:", timeLeft);
+
+      const timer = setInterval(() => {
+        timeLeft -= 1;
+        io.to(roomId).emit("timer-update", { timeLeft });
+
+        if (timeLeft <= 0 || room.guessedPlayers.length === room.players.length - 1) {
+          clearInterval(timer);
+          endTurn(roomId);
+        }
+      }, 1000);
+    }
+
+    function endTurn(roomId: string) {
+      console.log("Ending turn for room:", roomId);
+      const room = rooms[roomId];
+
+      // Attribution des points
+      room.guessedPlayers.forEach((playerId) => {
+        room.scoreBoard.find((score) => score.playerId === playerId).score += 100;
+      });
+
+      io.to(roomId).emit("turn-ended", {
+        scores: Array.from(room.scoreBoard),
+        word: room.currentWord,
+        guessedPlayers: Array.from(room.guessedPlayers),
+      });
+
+      // Préparation du prochain tour
+      room.currentDrawerIndex = (room.currentDrawerIndex + 1) % room.players.length;
+      if (room.currentDrawerIndex === 0) {
+        room.currentRound += 1;
+        if (room.currentRound > room.roomSettings.rounds) {
+          endGame(roomId);
+          return;
+        }
+      }
+
+      room.guessedPlayers = [];
+      startTurn(roomId);
+    }
+
+    function endGame(roomId: string) {
+      const room = rooms[roomId];
+
+      const winner = Object.entries(room.scoreBoard).reduce((prev, current) => (prev[1].score > current[1].score ? prev : current));
+
+      io.to(roomId).emit("game-ended", { winner, scores: Array.from(room.scoreBoard) });
+      room.gameStarted = false;
+    }
+
   });
 }

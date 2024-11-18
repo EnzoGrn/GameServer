@@ -19,6 +19,7 @@ export interface Room {
     guessedPlayers: Player[];
     currentWord: string;
     currentDrawer: Player;
+    currentDrawerIndex: number;
     currentRound: number;
     timeLeft: number;
     gameStarted: boolean, // L'état de la partie
