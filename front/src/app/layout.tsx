@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import { DM_Sans } from 'next/font/google'
-import Document, { Html, Head, Main, NextScript } from 'next/document';
 import "./globals.css";
+import { SocketProvider } from "@/components/provider/SocketProvider";
+import React from "react";
 
 /*
  * @brief Main font for the application.
@@ -28,9 +29,13 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         <link href="https://fonts.googleapis.com/css2?family=Patrick+Hand&display=swap" rel="stylesheet" />
       </head>
       <body className={font.className}>
-        <div className={`w-100 h-screen flex justify-center items-center flex-col overflow-hidden bg-[url('assets/background.png')]`}>
-          {children}
-        </div>
+        <React.StrictMode>
+          <SocketProvider>
+            <div className={`flex justify-center items-center flex-col overflow-hidden bg-[url('assets/background.png')]`}>
+              {children}
+            </div>
+          </SocketProvider>
+        </React.StrictMode>
       </body>
     </html>
   );

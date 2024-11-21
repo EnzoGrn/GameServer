@@ -1,196 +1,220 @@
-'use client'
+'use client';
 
-import { useRouter } from 'next/navigation';
+// -- Components -- //
+import Title from '@/components/header/Title';
+import LabelBlock from '@/components/block/LabelBlock';
 
-import React, { useEffect, useState } from "react";
-import Link from "next/link";
-import { io } from "socket.io-client";
+// -- Librairies -- //
+import React, { useState, useEffect } from "react";
+import { useSocket } from '@/components/provider/SocketProvider';
+import { useRouter, useSearchParams } from 'next/navigation';
+import Random from '@/lib/random/string';
 
-interface Player {
-  id: string; // socket id
-  userName: string; // user name
-  host: boolean; // is host or not
-  hasGuessed: boolean;  // has guessed the word or not
-  kicksToOut: number; // number of kicks to out
-  kicksGot: Player[]; // kicks got from other players
-  userAvatar?: string; // user avatar
-  timestamp?: number; // timestamp of joining the room
-}
-
-interface Room {
-  id: string; // room code
-  players: Player[]; // players in the room
-  messages: any[]; // messages in the room
-  scoreBoard: any[]; // score board of the room
-  useCustomWords: boolean; // use custom words or not
-  customWords: string[]; // custom words
-  whoGuessedIt: string[]; // who guessed the word
-  roomSettings: {
-    players: string; // number of players
-    language: string; // language
-    drawTime: string; // draw time
-    rounds: string; // number of rounds
-    wordCount: string; // number of words to choose from
-    hints: string; // number of hints
-    private: boolean; // is private or not
-  };
-}
-
+// -- Types -- //
+import { Room } from '@/lib/type/types';
 
 export default function Home()
 {
-  const router = useRouter();
+  // -- Navigation -- //
 
-  const navigateToGameRoom = (id: string) => {
-    router.push(`/${id}`);
+  const router       = useRouter();
+  const searchParams = useSearchParams();
+
+  // -- Default inputs fields values -- //
+    // -- Variables -- //
+  const [playerName, setPlayerName] = useState<string>('');
+  const [language  , setLanguage]   = useState<string>('English');
+
+    // -- Functions -- //
+  const OnPlayerNameChange = (value: string) => {
+    let name: string = value;
+
+    localStorage.setItem("player", name);
+
+    setPlayerName(name);
+
+    console.log("Player name changed to " + name);
   }
 
-  const [socket, setSocket] = useState<any>(null);
-  const [playerName, setPlayerName] = useState<string>("");
-  const [availableRooms, setAvailableRooms] = useState<{ [key: string]: Room }>({});
+  const OnLanguageChange = (value: string) => {
+    let language: string = value;
 
+    localStorage.setItem("language", language);
+
+    setLanguage(language);
+
+    console.log("Language changed to " + language);
+  }
+
+    // -- On load -- //
+
+  /*
+   * @brief When the page is loaded, we get the player name and the language from the local storage.
+   * Thanks to that the player can get his previous settings.
+   * And if he never played before, the default values are used.
+   */
   useEffect(() => {
-    const socketInstance = io("http://localhost:3001");
-    setSocket(socketInstance);
+    let name    : string = localStorage.getItem("player")   || "";
+    let language: string = localStorage.getItem("language") || "English";
 
-    socketInstance.on("send-all-rooms", (rooms: { [key: string]: Room }) => {
-      setAvailableRooms(rooms);
-      console.log(rooms);
-    });
-
-    socketInstance.emit("get-all-rooms");
+    setPlayerName(name);
+    setLanguage(language);
   }, []);
 
-  const generateRandomString = (length: number) => {
-    let result = "";
-    const characters = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-    const charactersLength = characters.length;
+  // -- Socket -- //
 
-    for (let i = 0; i < length; i++) {
-      result += characters.charAt(Math.floor(Math.random() * charactersLength));
+  const { socket } = useSocket();
+
+  useEffect(() => {
+    if (socket) {
+      console.log("Socket is connected");
+
+      socket.on("send-all-rooms", (rooms: { [key: string]: Room }) => {
+        setAvailableRooms(rooms);
+
+        console.log(rooms);
+      });
+
+      socket.emit("get-all-rooms");
     }
 
-    return result;
-  };
+    return () => {
+      socket?.off("send-all-rooms"); // Remove the listener
+    };
+  }, [socket]);
+
+  // -- Rooms management -- //
+
+  const [availableRooms, setAvailableRooms] = useState<{ [key: string]: Room }>({}); // List of all available rooms never displayed
+  const [roomCode      , setRoomCode]       = useState<string | null>(null);
+
+  useEffect(() => {
+    const code = searchParams.get("code");
+
+    if (code) {
+      setRoomCode(code);
+
+      console.log("Room code found: " + code);
+    }
+  }, [searchParams])
+
+  const generatePlayerName = (username: string) : string => {
+    return username || "Player_" + Math.floor(Math.random() * 1000);
+  }
 
   const createRoom = () => {
     if (socket) {
-      console.log("Creating room with socket");
+      const name: string = generatePlayerName(playerName);
+
+      console.log(name + " is creating a room...");
+
       const data = {
-        roomId: generateRandomString(6),
-        userAvatar: "",
-        userId: socket.id,
-        playerName: playerName,
-        timestamp: Date.now()
+        roomId    : Random.RandString(6),
+        userAvatar: "", // TODO: Add avatar selection
+        userId    : socket.id,
+        userName  : name,
+        timestamp : Date.now()
       };
+
       socket.emit("create-room", data);
 
-      navigateToGameRoom(data.roomId);
+      console.log("Room created with id " + data.roomId);
+
+      // -- Go to the room -- //
+      router.push(`/${data.roomId}`);
     }
   };
 
-  const joinRoom = (roomId: string) => {
-    if (socket) {
-      const data = {
-        roomId,
-        userAvatar: "",
-        userId: socket.id,
-        playerName: playerName,
-        timestamp: Date.now()
-      };
-      socket.emit("join-room", data);
+  const join = () => {
+    const joinRoom = (roomId: string) => {
+      if (socket) {
+        const name: string = generatePlayerName(playerName);
 
-      navigateToGameRoom('12345-67890');
+        const data = {
+          roomId    : roomId,
+          userAvatar: "", // TODO: Add avatar selection
+          userId    : socket.id,
+          userName  : name,
+          timestamp : Date.now()
+        };
+
+        // TODO: Check if the room exists, if not, create it
+
+        socket.emit("join-room", data);
+
+        console.log(name + " is joining the room " + roomId);
+
+        // -- Go to the room -- //
+        router.push(`/${roomId}`);
+      }
     }
-  };
+
+    if (roomCode) {
+      joinRoom(roomCode);
+    } else {
+      const keys = Object.keys(availableRooms);
+
+      if (keys.length > 0) {
+        const randomKey = keys[Math.floor(Math.random() * keys.length)];
+
+        joinRoom(randomKey);
+      } else {
+        // TODO: Create a room with a random code, and default settings
+        console.log("No room available, creating a new one...");
+      }
+    }
+  }
 
   return (
-    <main className="flex flex-col items-center justify-center min-h-screen text-base-content px-4">
-      <header className="mb-8 text-center">
-        <h1 className="text-5xl font-bold text-center bg-white border border-gray-400 p-2 rounded-md shadow-md font-patrick-hand">
-          <span className="text-red-500 border-b-2 border-red-700">D</span>
-          <span className="text-green-500 border-b-2 border-green-700">r</span>
-          <span className="text-blue-500 border-b-2 border-blue-700">a</span>
-          <span className="text-yellow-500 border-b-2 border-yellow-700">w</span>
-          <span className="text-purple-500 border-b-2 border-purple-700">i</span>
-          <span className="text-orange-500 border-b-2 border-orange-700">n</span>
-          <span className="text-pink-500 border-b-2 border-pink-700">g</span>
-          <span className="text-teal-500 border-b-2 border-teal-700">T</span>
-          <span className="text-indigo-500 border-b-2 border-indigo-700">o</span>
-          <span className="text-lime-500 border-b-2 border-lime-700">g</span>
-          <span className="text-cyan-500 border-b-2 border-cyan-700">e</span>
-          <span className="text-gray-500 border-b-2 border-gray-700">t</span>
-          <span className="text-red-500 border-b-2 border-red-700">h</span>
-          <span className="text-green-500 border-b-2 border-green-700">e</span>
-          <span className="text-blue-500 border-b-2 border-blue-700">r</span>
-        </h1>
-      </header>
+    <main className="flex flex-col items-center justify-center min-h-screen px-4 py-8">
 
-      <main className="flex flex-col md:flex-row space-y-6 md:space-y-0 md:space-x-10">
-        <div className="w-full md:w-96 p-6 bg-white rounded-lg shadow-lg">
-          <h2 className="text-xl md:text-2xl font-semibold mb-4">Créer une Salle</h2>
-          <input
-            type="text"
-            placeholder="Nom du joueur"
-            value={playerName}
-            onChange={(e) => setPlayerName(e.target.value)}
-            className="w-full p-2 mb-4 border border-gray-300 rounded-md"
-          />
-          {/*<div className="space-y-2">
-            <label className="block">
-              Nombre de joueurs :
-              <input
-                type="number"
-                value={playersCount}
-                onChange={(e) => setPlayersCount(Number(e.target.value))}
-                min="2"
-                max="10"
-                className="w-full mt-1 p-2 border border-gray-300 rounded-md"
-              />
-            </label>
-            <label className="block">
-              Langue :
-              <select
-                value={language}
-                onChange={(e) => setLanguage(e.target.value)}
-                className="w-full mt-1 p-2 border border-gray-300 rounded-md"
-              >
-                <option>Français</option>
-                <option>Anglais</option>
-              </select>
-            </label>
-          </div>*/}
+      {/* Title of the game */}
+      <Title title="Draw'It Together" />
+  
+      {/* Main Section */}
+      <div className="w-full max-w-md p-6 bg-white rounded-lg shadow-lg space-y-6">
+
+        {/* Label Section */}
+        <div className="w-full flex flex-row justify-between items-center gap-2">
+          <LabelBlock blockName="Player Name">
+            <input
+              type="text"
+              value={playerName}
+              onChange={(e) => OnPlayerNameChange(e.target.value)}
+              placeholder="Enter your name"
+              maxLength={15}
+              className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#f37b78] focus:outline-none"
+            />
+          </LabelBlock>
+
+          <LabelBlock blockName="Language">
+            <select
+              value={language}
+              onChange={(e) => OnLanguageChange(e.target.value)}
+              className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#f37b78] focus:outline-none"
+            >
+              <option value="English">English</option>
+              {/* -- Add more option */}
+            </select>
+          </LabelBlock>
+        </div>
+
+        <div className="space-y-2">
+          <button
+            onClick={join}
+            className="w-full bg-green-500 hover:bg-green-600 text-white py-3 text-xl font-bold rounded-md transition-all"
+          >
+            Play!
+          </button>
+
           <button
             onClick={createRoom}
-            className="w-full mt-4 bg-blue-500 hover:bg-blue-600 text-white py-2 rounded-md"
+            className="w-full bg-blue-500 hover:bg-blue-600 text-white py-2 rounded-md font-medium transition-all"
           >
-            Créer la Salle
+            Create Private Room
           </button>
         </div>
-
-        <div className="w-full md:w-96 p-6 bg-white rounded-lg shadow-lg">
-          <h2 className="text-xl md:text-2xl font-semibold mb-4">Rejoindre une Salle</h2>
-          <ul className="mb-4">
-            {Object.keys(availableRooms).map((room) => (
-              availableRooms[room].roomSettings.private === false && (
-                <li key={room} className="flex justify-between items-center">
-                  <span>{room}</span>
-                  <button
-                    onClick={() => joinRoom(room)}
-                    className="ml-4 bg-green-500 hover:bg-green-600 text-white py-1 px-2 rounded-md"
-                  >
-                    Rejoindre
-                  </button>
-                </li>
-              )
-            ))}
-          </ul>
-        </div>
-      </main>
-
-      <footer className="mt-10 text-gray-400 text-center">
-        <p>Besoin d'aide ? Consultez notre <a href="#" className="text-blue-500">FAQ</a></p>
-      </footer>
+      </div>
     </main>
   );
 }
