@@ -19,6 +19,8 @@ import p5 from 'p5';
 import { Player, Room, Message, ScoreBoard } from '@/lib/type/types';
 import { MouseData } from '@/lib/type/mouseData';
 import { isDrawing } from '@/lib/player/isDrawing';
+import Chat from '@/components/chat/chat';
+import { MessagesProvider } from '@/lib/chat/chatProvider';
 
 export default function Page()
 {
@@ -538,35 +540,10 @@ export default function Page()
           )}
         </div>
 
-        {/* Chat */}
-        <div className="w-full md:w-1/4 h-full p-4 bg-white shadow-md rounded-b-md border-[#c44b4a] border-b-2 border-l-2 flex flex-col order-3 md:order-3">
-          <h2 className="text-xl font-semibold mb-4">Chat</h2>
-          <div className="flex-1 overflow-y-auto space-y-2 min-h-96 max-h-96">
-            {/* Boucle à travers les messages dans room.messages */}
-            {thisRoom?.messages?.filter((msg: Message) => msg.timestamp >= (me?.timestamp ?? Infinity) || msg.timestamp === 0).map((msg: Message, index: number) => (
-                !msg.isPrivate || msg.isPrivate && msg.senderId === socket?.id ? (
-                  <div key={index} className="bg-red-100 p-2 rounded-md">
-                    {msg.text}
-                  </div>
-                ) : null
-              ))}
-          </div>
-          <div className="mt-4 flex">
-            <input
-              type="text"
-              value={message}
-              onChange={(e) => setMessage(e.target.value)}
-              placeholder="Votre message"
-              className="w-full p-2 border rounded-l-md border-[#c44b4a] focus:outline-none"
-            />
-            <button
-              onClick={() => SendChatMessage()}
-              className="bg-[#f37b78] hover:bg-[#c44b4a] text-white px-3 md:px-4 rounded-r-md"
-            >
-              Envoyer
-            </button>
-          </div>
-        </div>
+        {/* -- Chat -- */}
+        <MessagesProvider>
+          <Chat key={thisRoom?.id} room={thisRoom} room_id={thisRoom?.id} />
+        </MessagesProvider>
       </div>
 
       {/* Footer with the invitation link */}

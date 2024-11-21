@@ -18,7 +18,6 @@ export interface Player {
 export interface Room {
     id: string;
     players: Player[];
-    messages: any[];
     scoreBoard: ScoreBoard[];
     customWords: string[];
     guessedPlayers: Player[];
