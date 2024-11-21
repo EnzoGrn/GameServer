@@ -1,9 +1,9 @@
 import { Message, MessageType } from "@/lib/chat/messageType";
 import { useSocket } from "../provider/SocketProvider";
 import { useMessages } from "@/lib/chat/chatProvider";
+import { useEffect, useRef, useState } from "react";
 import { SendMessage } from "@/lib/chat/message";
 import { GetPlayerById } from "@/lib/room/room";
-import { useEffect, useState } from "react";
 import { Socket } from 'socket.io-client';
 import { Room } from "@/lib/type/types";
 
@@ -15,6 +15,8 @@ interface ChatProps {
 const Chat: React.FC<ChatProps> = ({ room_id, room }) => {
   const { socket } : { socket: Socket | null } = useSocket();
   const { messages, newMessage } : { messages: Message[], newMessage: (message: Message) => void } = useMessages();
+
+  const messagesEndRef = useRef<HTMLDivElement>(null); // Ref to the last message displayed in the chat.
 
   const [message , setMessage] = useState<string>('');     // The current message typed by the user, to send.
 
@@ -29,6 +31,10 @@ const Chat: React.FC<ChatProps> = ({ room_id, room }) => {
       socket.off('received-message');
     }
   }, []);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
 
   const receivedMessage = (message: Message) => {
     if (!room)
@@ -67,7 +73,7 @@ const Chat: React.FC<ChatProps> = ({ room_id, room }) => {
         {messages.map((msg: Message, index: number) => (
           <div key={index}>
             {msg.type === MessageType.MESSAGE && (
-              <div key={index} className={`flex flex-row gap-2 text-gray-800 ${socket?.id === msg.sender_id ? 'bg-slate-200' : ''}`}>
+              <div key={index} className={`flex flex-row gap-2 text-gray-800 rounded-md pl-2 ${socket?.id === msg.sender_id ? 'bg-slate-200' : ''}`}>
                 <span className="font-bold">
                   {msg.sender_name}:
                 </span>
@@ -76,7 +82,7 @@ const Chat: React.FC<ChatProps> = ({ room_id, room }) => {
             )}
 
             {msg.type === MessageType.SYSTEM && (
-                <div key={index} className={`flex font-semibold`} style={{
+                <div key={index} className={`flex font-semibold rounded-md pl-2`} style={{
                     color: msg.color
                 }}>
                   {msg.content}
@@ -84,13 +90,14 @@ const Chat: React.FC<ChatProps> = ({ room_id, room }) => {
             )}
 
             {msg.type === MessageType.SECRET && (
-              <div key={index} className={`flex flex-row gap-2 text-green-600 ${socket?.id === msg.sender_id ? 'bg-slate-200' : ''}`}>
+              <div key={index} className={`flex flex-row gap-2 text-green-600 rounded-md pl-2 ${socket?.id === msg.sender_id ? 'bg-slate-200' : ''}`}>
                 <span className="font-bold">
                   {`${msg.sender_name}: `}
                 </span>
                 {msg.content}
               </div>
             )}
+            <div ref={messagesEndRef} />
           </div>
         ))}
       </div>
@@ -99,6 +106,10 @@ const Chat: React.FC<ChatProps> = ({ room_id, room }) => {
           type="text"
           value={message}
           onChange={(e) => setMessage(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter')
+              sendMessage(message, room_id);
+          }}
           placeholder="Votre message"
           className="w-full p-2 border rounded-l-md border-[#c44b4a] focus:outline-none"
         />
