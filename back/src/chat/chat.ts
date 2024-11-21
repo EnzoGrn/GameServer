@@ -21,9 +21,8 @@ const _CheckMessage = (room: Room, player: Player, message: string): number => {
     } else {
         const distance: number = levenshteinDistance(message, room.currentWord);
 
-        if (distance < 2 && distance > 0) {
-
-        }
+        if (distance < 2 && distance > 0)
+            return 0;
     }
     return -1;
 }
@@ -69,7 +68,7 @@ export const ReceivedMessage = (socket: Socket, room_id: string, message: Messag
 
         return SystemMessage(room, `${player.userName} found the word!`, SuccessColor);
     } else if (result === 0) {
-        return SystemMessage(room, `${room.currentWord} is close!`, WarningColor);
+        return SystemMessage(room, `${message.content} is close!`, WarningColor);
     }
     return message;
 }
