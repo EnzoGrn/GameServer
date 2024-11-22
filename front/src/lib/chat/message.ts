@@ -11,8 +11,8 @@ export const SendMessage = (socket: Socket, room_id: string, text: string, usern
     };
 
     socket?.emit('send-message', {
-        room_id,
-        message
+        room_id: room_id,
+        notify : message
     });
 
     return message;

@@ -301,12 +301,15 @@ export function setupSocket(io: Server) {
      * @brief send-message event, is a client event that the server is listening to.
      * It's detect when the client send a message to the server. And respond with the received-message event.
      */
-    socket.on("send-message", ({ room_id, message }) => {
-      const msg: Message | null = ReceivedMessage(socket, room_id, message);
+    socket.on("send-message", ({ room_id, notify }) => {
+      const { message, room } : { message: Message, room: Room } | null = ReceivedMessage(socket, room_id, notify);
 
-      if (!msg)
+      if (!message)
         return;
-      io.to(room_id).emit("received-message", { message: msg });
+      io.to(room_id).emit("received-message", {
+        message: message,
+        guessed: room.guessedPlayers
+      });
     });
 
     socket.on("get-word-list", ({ roomCode }) => {

@@ -4,8 +4,8 @@ import { useMessages } from "@/lib/chat/chatProvider";
 import { useEffect, useRef, useState } from "react";
 import { SendMessage } from "@/lib/chat/message";
 import { GetPlayerById } from "@/lib/room/room";
+import { Player, Room } from "@/lib/type/types";
 import { Socket } from 'socket.io-client';
-import { Room } from "@/lib/type/types";
 
 interface ChatProps {
   room_id ?: string;
@@ -23,8 +23,10 @@ const Chat: React.FC<ChatProps> = ({ room_id, room }) => {
   useEffect(() => {
     if (!socket)
       return;
-    socket.on('received-message', ({ message } : { message: Message }) => {
+    socket.on('received-message', ({ message, guessed } : { message: Message, guessed: Player[] }) => {
       receivedMessage(message);
+
+      room!.guessedPlayers = guessed;
     });
 
     return () => {

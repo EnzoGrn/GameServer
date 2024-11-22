@@ -44,7 +44,7 @@ export const SystemMessage = (room: Room, content: string, color: string): Messa
     return message;
 }
 
-export const ReceivedMessage = (socket: Socket, room_id: string, message: Message): Message | null => {
+export const ReceivedMessage = (socket: Socket, room_id: string, message: Message): { message: Message, room: Room } | null => {
     const room: Room | null = rooms[room_id];
 
     if (!room)
@@ -56,7 +56,7 @@ export const ReceivedMessage = (socket: Socket, room_id: string, message: Messag
     console.log("[SYSTEM] Message received: " + message.content + " from " + player.userName + " in room " + room_id);
 
     if (player.hasGuessed || (room.currentDrawer && player.id === room.currentDrawer.id)) // Check if the player already found it, or if it's the drawer.
-        return SecretMessage(room, message);
+        return { message: SecretMessage(room, message), room: room };
     let result: number = _CheckMessage(room, player, message.content);
 
     if (result === 1) {
@@ -66,9 +66,9 @@ export const ReceivedMessage = (socket: Socket, room_id: string, message: Messag
 
         // TODO: Notify all the players that the word has been found.
 
-        return SystemMessage(room, `${player.userName} found the word!`, SuccessColor);
+        return { message: SystemMessage(room, `${player.userName} found the word!`, SuccessColor), room: room };
     } else if (result === 0) {
-        return SystemMessage(room, `${message.content} is close!`, WarningColor);
+        return { message: SystemMessage(room, `${message.content} is close!`, WarningColor), room: room };
     }
-    return message;
+    return { message: message, room: room };
 }
