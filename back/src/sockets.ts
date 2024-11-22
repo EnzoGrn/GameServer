@@ -91,7 +91,7 @@ export function setupSocket(io: Server) {
       socket.join(roomId);
 
       io.to(roomId).emit("room-data-updated", { room: newRoom });
-      io.to(roomId).emit("received-message", { message: SystemMessage(newRoom, `${initialPlayer.userName} is now the room owner!`, OrangeColor) })
+      io.to(roomId).emit("received-message", { message: SystemMessage(newRoom, `${initialPlayer.userName} is now the room owner!`, OrangeColor), guessed: newRoom.guessedPlayers });
     });
 
     /**
@@ -138,7 +138,7 @@ export function setupSocket(io: Server) {
 
       // Mettre à jour les données de la room pour tous les clients
       io.to(roomId).emit("room-data-updated", { room: rooms[roomId] });
-      io.to(roomId).emit("received-message", { message: SystemMessage(room, `${userName} joined the room!`, OrangeColor) });
+      io.to(roomId).emit("received-message", { message: SystemMessage(room, `${userName} joined the room!`, OrangeColor), guessed: room.guessedPlayers });
     });
 
     /**
@@ -174,7 +174,7 @@ export function setupSocket(io: Server) {
             delete rooms[room.id];
           }
 
-          io.to(room.id).emit("received-message", { message: SystemMessage(room, `${player.userName} left the room!`, OrangeColor) });
+          io.to(room.id).emit("received-message", { message: SystemMessage(room, `${player.userName} left the room!`, OrangeColor), guessed: room.guessedPlayers });
 
           // Si l'hôte se déconnecte, choisir un nouveau hôte aléatoire
           if (player.host && room.players.length > 0) {
@@ -184,7 +184,7 @@ export function setupSocket(io: Server) {
               checker.id === randomPlayer.id ? { ...checker, host: true } : checker
             );
 
-            io.to(room.id).emit("received-message", { message: SystemMessage(room, `${randomPlayer.userName} is now the room owner!`, OrangeColor) });
+            io.to(room.id).emit("received-message", { message: SystemMessage(room, `${randomPlayer.userName} is now the room owner!`, OrangeColor), guessed: room.guessedPlayers });
           }
 
           if (room.gameStarted && room.players.length < 2) {
@@ -222,7 +222,7 @@ export function setupSocket(io: Server) {
         delete rooms[roomCode];
       }
 
-      io.to(roomCode).emit("received-message", { message: SystemMessage(room, `${mySelf.userName} left the room!`, OrangeColor) });
+      io.to(roomCode).emit("received-message", { message: SystemMessage(room, `${mySelf.userName} left the room!`, OrangeColor), guessed: room.guessedPlayers });
 
       if (mySelf.host && room.players.length > 0) {
         const randomPlayer = room.players[Math.floor(Math.random() * room.players.length)];
@@ -231,7 +231,7 @@ export function setupSocket(io: Server) {
           checker.id === randomPlayer.id ? { ...checker, host: true } : checker
         );
 
-        io.to(roomCode).emit("received-message", { message: SystemMessage(room, `${randomPlayer.userName} is now the room owner!`, OrangeColor) });
+        io.to(roomCode).emit("received-message", { message: SystemMessage(room, `${randomPlayer.userName} is now the room owner!`, OrangeColor), guessed: room.guessedPlayers });
       }
 
       if (room.gameStarted && room.players.length < 2) {
@@ -286,7 +286,7 @@ export function setupSocket(io: Server) {
     socket.on("start-game", ({ roomCode }) => {
       const room = rooms[roomCode];
       if (!room || room.players.length < 2) {
-        io.to(roomCode).emit("received-message", { message: SystemMessage(room, "Room must have at least two players to start the game!", ErrorColor) });
+        io.to(roomCode).emit("received-message", { message: SystemMessage(room, "Room must have at least two players to start the game!", ErrorColor), guessed: [] });
         io.to(roomCode).emit("room-data-updated", { room });
         return;
       }
@@ -302,14 +302,21 @@ export function setupSocket(io: Server) {
      * It's detect when the client send a message to the server. And respond with the received-message event.
      */
     socket.on("send-message", ({ room_id, notify }) => {
-      const { message, room } : { message: Message, room: Room } | null = ReceivedMessage(socket, room_id, notify);
+      const { message, room, isClose } : { message: Message | null, room: Room | null, isClose: boolean } = ReceivedMessage(socket, room_id, notify);
 
-      if (!message)
+      if (!message || !room)
         return;
       io.to(room_id).emit("received-message", {
         message: message,
         guessed: room.guessedPlayers
       });
+
+      if (isClose) {
+        socket.emit("received-message", {
+            message: SystemMessage(room, `${message.content} is close!`, WarningColor),
+            guessed: room.guessedPlayers
+        });
+      }
     });
 
     socket.on("get-word-list", ({ roomCode }) => {

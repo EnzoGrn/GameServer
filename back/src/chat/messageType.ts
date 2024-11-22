@@ -3,9 +3,9 @@
  * @note You can used it for differenciate the message and had a custom display for each type of message.
  */
 export enum MessageType {
-    MESSAGE, // Normal message.
-    SYSTEM,  // System message.
-    SECRET   // Secret message (private, only shown to all the users that found the word for example).
+  MESSAGE, // Normal message.
+  SYSTEM,  // System message.
+  SECRET   // Secret message (private, only shown to all the users that found the word for example).
 }
 
 /*

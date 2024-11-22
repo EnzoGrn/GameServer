@@ -6,6 +6,7 @@ import { SendMessage } from "@/lib/chat/message";
 import { GetPlayerById } from "@/lib/room/room";
 import { Player, Room } from "@/lib/type/types";
 import { Socket } from 'socket.io-client';
+import MessageView from "./message";
 
 interface ChatProps {
   room_id ?: string;
@@ -74,31 +75,8 @@ const Chat: React.FC<ChatProps> = ({ room_id, room }) => {
       <div className="flex-1 overflow-y-auto space-y-2 min-h-96 max-h-96">
         {messages.map((msg: Message, index: number) => (
           <div key={index}>
-            {msg.type === MessageType.MESSAGE && (
-              <div key={index} className={`flex flex-row gap-2 text-gray-800 rounded-md pl-2 ${socket?.id === msg.sender_id ? 'bg-slate-200' : ''}`}>
-                <span className="font-bold">
-                  {msg.sender_name}:
-                </span>
-                {msg.content}
-              </div>
-            )}
+            <MessageView message={msg} />
 
-            {msg.type === MessageType.SYSTEM && (
-                <div key={index} className={`flex font-semibold rounded-md pl-2`} style={{
-                    color: msg.color
-                }}>
-                  {msg.content}
-                </div>
-            )}
-
-            {msg.type === MessageType.SECRET && (
-              <div key={index} className={`flex flex-row gap-2 text-green-600 rounded-md pl-2 ${socket?.id === msg.sender_id ? 'bg-slate-200' : ''}`}>
-                <span className="font-bold">
-                  {`${msg.sender_name}: `}
-                </span>
-                {msg.content}
-              </div>
-            )}
             <div ref={messagesEndRef} />
           </div>
         ))}

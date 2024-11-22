@@ -44,19 +44,19 @@ export const SystemMessage = (room: Room, content: string, color: string): Messa
     return message;
 }
 
-export const ReceivedMessage = (socket: Socket, room_id: string, message: Message): { message: Message, room: Room } | null => {
+export const ReceivedMessage = (socket: Socket, room_id: string, message: Message): { message: Message | null, room: Room | null, isClose: boolean } => {
     const room: Room | null = rooms[room_id];
 
     if (!room)
-        return null;
+        return { message: null, room: null, isClose: false };
     const player: Player | null = GetPlayerInRoom(room, message.sender_id);
 
     if (!player)
-        return null;
+        return { message: null, room: room, isClose: false };
     console.log("[SYSTEM] Message received: " + message.content + " from " + player.userName + " in room " + room_id);
 
     if (player.hasGuessed || (room.currentDrawer && player.id === room.currentDrawer.id)) // Check if the player already found it, or if it's the drawer.
-        return { message: SecretMessage(room, message), room: room };
+        return { message: SecretMessage(room, message), room: room, isClose: false };
     let result: number = _CheckMessage(room, player, message.content);
 
     if (result === 1) {
@@ -64,11 +64,9 @@ export const ReceivedMessage = (socket: Socket, room_id: string, message: Messag
             word: room.currentWord
         });
 
-        // TODO: Notify all the players that the word has been found.
-
-        return { message: SystemMessage(room, `${player.userName} found the word!`, SuccessColor), room: room };
+        return { message: SystemMessage(room, `${player.userName} found the word!`, SuccessColor), room: room, isClose: false };
     } else if (result === 0) {
-        return { message: SystemMessage(room, `${message.content} is close!`, WarningColor), room: room };
+        return { message: message, room: room, isClose: true };
     }
-    return { message: message, room: room };
+    return { message: message, room: room, isClose: false };
 }
