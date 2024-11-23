@@ -16,14 +16,15 @@ import { Socket } from 'socket.io-client';
 import p5 from 'p5';
 
 // -- Types -- //
-import { Player, Room, Message, ScoreBoard } from '@/lib/type/types';
+import { Player, Room, Message, ScoreBoard, Team } from '@/lib/type/types';
 import { MouseData } from '@/lib/type/mouseData';
 import { isDrawing } from '@/lib/player/isDrawing';
+import SwitchButtonMode from '@/components/list/SwitchButtonMode';
 
 export default function Page()
 {
   // -- The socket -- //
-  const { socket } = useSocket();
+  const { socket }: { socket: Socket | undefined } = useSocket();
   const roomRef    = useRef<Room | null>(null);
   const [thisRoom, setRoom] = useState<Room | null>(null);
 
@@ -118,8 +119,16 @@ export default function Page()
 
       if (!draw || choosingWord || !room || !socket)
         return;
-      if (room?.currentDrawer?.id !== socket.id)
-        return;
+
+      if (room?.roomSettings.isClassicMode) {
+        console.log('Classic mode' + room?.currentDrawer?.id + ' ' + socket.id);
+        if (room?.currentDrawer?.id !== socket.id)
+          return;
+      } else {
+        if (!room?.currentTeamDrawer?.players.find((player) => player.id === socket.id))
+          return;
+      }
+      
       const currentTool = toolRef.current;
       const x  = p.mouseX;
       const y  = p.mouseY;
@@ -261,10 +270,21 @@ export default function Page()
       clearCanvas();
     };
 
+    const handleTurnStartedTeam = ({ currentTeamDrawer, round, currentDrawer }: { currentTeamDrawer: Team; round: number, currentDrawer: Player }) => {
+      setRoom((prevRoom) => prevRoom ? { ...prevRoom, currentTeamDrawer: currentTeamDrawer, currentDrawer: currentDrawer, currentRound: round } : prevRoom);
+      setTimeLeft(thisRoom?.roomSettings?.drawTime || 60);
+      setCanDraw(false);
+      setGameStarted(true);
+
+      clearCanvas();
+    }
+
     socket.on("turn-started", handleTurnStarted);
+    socket.on("turn-started-team", handleTurnStartedTeam);
 
     return () => {
       socket.off("turn-started", handleTurnStarted);
+      socket.off("turn-started-team", handleTurnStartedTeam);
     };
   }, [socket, thisRoom]);
 
@@ -329,10 +349,31 @@ export default function Page()
       setCanDraw(true);
     };
 
+    const HandleWordChosenTeam = ({ currentWord, wordLength, DrawerPlayersTeam }: { currentWord: string, wordLength: number, DrawerPlayersTeam: Player[] }) => {
+
+      setIsChoosingWord(false);
+
+      if (DrawerPlayersTeam.find((player) => player.id === me?.id)) {
+        setRoom((prevRoom) => prevRoom ? { ...prevRoom, currentWord } : prevRoom);
+      } else {
+        setRoom((prevRoom) => prevRoom ? { ...prevRoom, currentWord: "_".repeat(wordLength) } : prevRoom);
+      }
+
+      // check if the player is in the team that can draw
+      if (DrawerPlayersTeam.find((player) => player.id === me?.id)) {
+        setGameState('drawing');
+      } else {
+        setGameState('guessing');
+      }
+      setCanDraw(true);
+    };
+
     socket.on("word-chosen", handleWordChosen);
+    socket.on("word-chosen-team", HandleWordChosenTeam);
 
     return () => {
       socket.off("word-chosen", handleWordChosen);
+      socket.off("word-chosen-team", HandleWordChosenTeam);
     };
   }, [socket, thisRoom]);
 
@@ -445,7 +486,7 @@ export default function Page()
       <div className="flex flex-col md:flex-row flex-grow h-full">
 
         {/* Liste des joueurs */}
-        <PlayerList players={thisRoom?.players} me={me} drawer={thisRoom?.currentDrawer} scoreBoard={thisRoom?.scoreBoard} />
+        <SwitchButtonMode thisRoom={thisRoom} me={me} socket={socket} />
 
         {/* Zone de dessin */}
         <div className="flex-1 p-4 flex flex-col items-center order-1 md:order-2">
