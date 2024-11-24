@@ -253,11 +253,10 @@ export function setupSocket(io: Server) {
         endGame(room.id);
       }
 
-      // TODO: Si la room n'est pas en mode classique, enlever le joueur de son équipe
-      // const player = room.players.find((player) => player.id === mySelf.id);
-      // if (!room.roomSettings.isClassicMode) {
-      //   removePlayerFromTeam(room, player);
-      // }
+      if (!room.roomSettings.isClassicMode) {
+        const player: Player = room.players.find((player) => player.id === mySelf.id);
+        removePlayerFromTeam(room, player);
+      }
 
       io.to(roomCode).emit("room-data-updated", { room: rooms[roomCode] });
     });
