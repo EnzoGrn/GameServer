@@ -142,7 +142,9 @@ export function setupSocket(io: Server) {
       socket.join(roomId);
 
       // Mettre à jour les données de la room pour tous les clients
+      console.log("User joined room:", room);
       io.to(roomId).emit("room-data-updated", { room: rooms[roomId] });
+      io.to(roomId).emit("mode-update", { isClassicMode: room.roomSettings.isClassicMode });
     });
 
     /**
@@ -555,6 +557,7 @@ export function setupSocket(io: Server) {
 
       changeTeamPlayMode(room);
       io.to(roomId).emit("mode-update", { isClassicMode: room.roomSettings.isClassicMode });
+      io.to(roomId).emit("room-data-updated", { room: rooms[roomId] });
     });
 
     socket.on("add-player-to-a-team", ({ roomId, playerId }) => {
@@ -568,6 +571,7 @@ export function setupSocket(io: Server) {
         if (!player || !team) return;
 
         addPlayerToTeam(room, player, team);
+      io.to(roomId).emit("room-data-updated", { room: rooms[roomId] });
     });
 
     socket.on("remove-player-from-team", ({ roomId, playerId }) => {
@@ -580,6 +584,7 @@ export function setupSocket(io: Server) {
         if (!player) return;
 
         removePlayerFromTeam(room, player);
+      io.to(roomId).emit("room-data-updated", { room: rooms[roomId] });
     });
 
     socket.on("switch-player-team", ({ roomId, playerId }) => {

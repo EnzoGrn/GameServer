@@ -34,7 +34,7 @@ export function createRoom(roomId: string, initialPlayer: Player, timestamp: num
       hints: 2,
       useCustomWords: false,
       private: false,
-      isClassicMode: false,
+      isClassicMode: true,
     },
     teams: [
       { id: "0", players: [], hasGuessed: false },

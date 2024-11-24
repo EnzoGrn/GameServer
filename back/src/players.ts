@@ -12,6 +12,7 @@ export function addPlayerToRoom(room: Room, userId: string, userAvatar: string, 
     kicksToOut: 0,
     kicksGot: [],
     hasGuessed: false,
+    teamId: undefined,
   };
   room.players.push(newPlayer);
 

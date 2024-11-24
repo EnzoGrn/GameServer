@@ -1,11 +1,21 @@
 // src/team.ts
-import { Console, debug } from "console";
 import { Player, Room, Team } from "./types";
 
 export function changeTeamPlayMode(room: Room) {
   if (!room.gameStarted) {
     room.roomSettings.isClassicMode = !room.roomSettings.isClassicMode;
   }
+
+  console.log("Changing team play mode: ");
+
+  // Add players that are not in a team to a team
+  room.players.forEach((player) => {
+    console.log("Player: ", player);
+    if (!player.teamId) {
+      console.log("Player not in a team: ", player);
+      addAPlayerToATeam(room, player);
+    }
+  });
 
   console.log("Room settings: ", room.roomSettings);
 }

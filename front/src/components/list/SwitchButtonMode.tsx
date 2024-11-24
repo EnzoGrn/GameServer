@@ -4,9 +4,9 @@ import ListTeams from './ListTeams';
 import PlayerList from './PlayerList';
 import { Socket } from 'socket.io-client';
 
-const SwitchButtonMode = ({ thisRoom, me, socket }: { thisRoom: Room | null, me?: Player, socket?: Socket }) => {
+const SwitchButtonMode = ({ thisRoom, isClassicModeRoom, me, socket }: { thisRoom: Room, isClassicModeRoom: boolean, me: Player, socket: Socket }) => {
     // State to track if it is classic mode or team mode
-    const [isClassicMode, setIsClassicMode] = useState(thisRoom?.roomSettings.isClassicMode);
+    const [isClassicMode, setIsClassicMode] = useState<boolean>(isClassicModeRoom);
 
     const switchTeam = () => {
         console.log("Switching team mode");

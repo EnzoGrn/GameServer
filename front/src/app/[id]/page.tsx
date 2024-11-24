@@ -121,7 +121,6 @@ export default function Page()
         return;
 
       if (room?.roomSettings.isClassicMode) {
-        console.log('Classic mode' + room?.currentDrawer?.id + ' ' + socket.id);
         if (room?.currentDrawer?.id !== socket.id)
           return;
       } else {
@@ -485,8 +484,14 @@ export default function Page()
       {/* Main Section */}
       <div className="flex flex-col md:flex-row flex-grow h-full">
 
-        {/* Liste des joueurs */}
-        <SwitchButtonMode thisRoom={thisRoom} me={me} socket={socket} />
+        {thisRoom?.roomSettings && me && socket && (
+          <>
+          {console.log("thisRoom?.roomSettings.isClassicMode TEST", thisRoom?.roomSettings.isClassicMode)}
+          <SwitchButtonMode thisRoom={thisRoom} isClassicModeRoom={thisRoom?.roomSettings.isClassicMode} me={me} socket={socket} />
+          </>
+        )}
+
+        
 
         {/* Zone de dessin */}
         <div className="flex-1 p-4 flex flex-col items-center order-1 md:order-2">
@@ -552,7 +557,22 @@ export default function Page()
           </div>
 
           {/* Tools (brush) */}
-          {gameStarted && canDraw && isDrawing(me!, thisRoom?.currentDrawer) && (
+
+          {thisRoom?.roomSettings.isClassicMode && gameStarted && canDraw && isDrawing(me!, thisRoom?.currentDrawer) && (
+           <div className="flex items-center space-x-2 md:space-x-4">
+            <button onClick={() => setTool('pencil')}>Pencil</button>
+            <button onClick={() => setTool('eraser')}>Eraser</button>
+
+            <button
+              onClick={clearCanvas}
+              className="bg-red-400 px-3 md:px-4 py-1 md:py-2 rounded-md text-white"
+            >
+              Clear
+            </button>
+          </div>
+          )}
+
+          {(!thisRoom?.roomSettings.isClassicMode && gameStarted && canDraw && thisRoom?.currentTeamDrawer?.players.find((player : Player) => player.id === me?.id)) && (
             <div className="flex items-center space-x-2 md:space-x-4">
               <button onClick={() => setTool('pencil')}>Pencil</button>
               <button onClick={() => setTool('eraser')}>Eraser</button>
