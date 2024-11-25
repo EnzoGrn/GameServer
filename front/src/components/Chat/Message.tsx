@@ -8,7 +8,7 @@ const MessageView: React.FC<{ message: Message }> = ({ message }) => {
   return (
     <>
       {message.type === MessageType.MESSAGE && (
-        <div key={message.timestamp} className={`flex flex-row gap-2 text-gray-800 rounded-md pl-2 ${socket?.id === message.sender_id ? 'bg-slate-200' : ''}`}>
+        <div key={message.timestamp} className={`flex flex-row gap-2 text-gray-800 rounded-md pl-2 ${socket?.id === message.sender_id ? 'bg-[#f37b78] bg-opacity-10' : ''}`}>
           <span className="font-bold">
             {message.sender_name}:
           </span>
@@ -28,7 +28,7 @@ const MessageView: React.FC<{ message: Message }> = ({ message }) => {
       )}
 
       {message.type === MessageType.SECRET && (
-        <div key={message.timestamp} className={`flex flex-row gap-2 text-green-600 rounded-md pl-2 ${socket?.id === message.sender_id ? 'bg-slate-200' : ''}`}>
+        <div key={message.timestamp} className={`flex flex-row gap-2 text-[#22c55e] rounded-md pl-2 ${socket?.id === message.sender_id ? 'bg-[#f37b78] bg-opacity-10' : ''}`}>
           <span className="font-bold">
             {`${message.sender_name}: `}
           </span>

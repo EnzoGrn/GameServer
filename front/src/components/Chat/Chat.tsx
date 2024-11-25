@@ -69,7 +69,7 @@ const Chat: React.FC<ChatProps> = ({ room }) => {
 
   return (
     <div className="w-full h-full p-4 bg-[#f9f9f9] shadow-md rounded-lg border-[#c44b4a] border-2 flex flex-col order-3 md:order-3 justify-between">
-      <div className="flex-1 overflow-y-auto space-y-2 h-full max-h-[73vh]">
+      <div className="flex-1 overflow-y-auto space-y-2 h-full max-h-[73vh] no-scrollbar">
         {messages.map((msg: Message, index: number) => (
           <div key={index}>
             <MessageView message={msg} />
@@ -78,7 +78,7 @@ const Chat: React.FC<ChatProps> = ({ room }) => {
           </div>
         ))}
       </div>
-      <div className="mt-4 flex">
+      <div className="join w-full">
         <input
           type="text"
           value={message}
@@ -87,16 +87,14 @@ const Chat: React.FC<ChatProps> = ({ room }) => {
             if (e.key === 'Enter')
               sendMessage(message, room?.id);
           }}
-          placeholder="Votre message"
-          className="w-full p-2 border rounded-l-md border-[#c44b4a] focus:outline-none"
+          className="input input-bordered join-item border border-[#f37b78] focus:border-[#c44b4a] rounded-l-md bg-[#f9f9f9] focus:outline-none w-full"
+          placeholder="Type your guess here..."
         />
         <button
-          onClick={() => {
-            sendMessage(message, room?.id);
-          }}
-          className="bg-[#f37b78] hover:bg-[#c44b4a] text-white px-3 md:px-4 rounded-r-md"
+          onClick={() => sendMessage(message, room?.id)}
+          className="btn join-item text-white px-4 rounded-r-md bg-[#f37b78] hover:bg-[#c44b4a]"
         >
-          Envoyer
+          Send
         </button>
       </div>
     </div>
