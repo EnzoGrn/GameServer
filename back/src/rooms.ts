@@ -7,12 +7,6 @@ export function createRoom(roomId: string, initialPlayer: Player, timestamp: num
   const newRoom: Room = {
     id: roomId,
     players: [initialPlayer],
-    messages: [{
-      text: `${initialPlayer.userName} is now the room owner!`,
-      timestamp: 0,
-      bgColor: "white",
-      color: "black",
-    }],
     scoreBoard: [{
       playerId: initialPlayer.id,
       score: 0
@@ -50,6 +44,10 @@ export function createRoom(roomId: string, initialPlayer: Player, timestamp: num
   };
   rooms[roomId] = newRoom;
   return newRoom;
+}
+
+export const GetPlayerInRoom = (room: Room, player_id: string): Player | null => {
+  return room.players.find((player: Player) => player.id === player_id) || null;
 }
 
 // Autres fonctions pour ajouter des joueurs, supprimer des joueurs, etc.
