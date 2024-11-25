@@ -68,11 +68,8 @@ const Chat: React.FC<ChatProps> = ({ room }) => {
   }
 
   return (
-    <div className="w-full md:w-1/4 h-full p-4 bg-white shadow-md rounded-b-md border-[#c44b4a] border-b-2 border-l-2 flex flex-col order-3 md:order-3">
-      <h2 className="text-xl font-semibold mb-4">
-        Chat
-      </h2>
-      <div className="flex-1 overflow-y-auto space-y-2 min-h-96 max-h-96">
+    <div className="w-full h-full p-4 bg-[#f9f9f9] shadow-md rounded-lg border-[#c44b4a] border-2 flex flex-col order-3 md:order-3 justify-between">
+      <div className="flex-1 overflow-y-auto space-y-2 h-full max-h-[73vh]">
         {messages.map((msg: Message, index: number) => (
           <div key={index}>
             <MessageView message={msg} />
