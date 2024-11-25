@@ -117,6 +117,7 @@ export default function Home()
       };
 
       socket.emit("create-room", data);
+      socket.emit("init-teams", data.roomId);
 
       console.log("Room created with id " + data.roomId);
 

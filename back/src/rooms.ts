@@ -10,6 +10,8 @@ export function createRoom(roomId: string, initialPlayer: Player, timestamp: num
     messages: [{
       text: `${initialPlayer.userName} is now the room owner!`,
       timestamp: 0,
+      bgColor: "white",
+      color: "black",
     }],
     scoreBoard: [{
       playerId: initialPlayer.id,
@@ -32,7 +34,19 @@ export function createRoom(roomId: string, initialPlayer: Player, timestamp: num
       hints: 2,
       useCustomWords: false,
       private: false,
+      isClassicMode: true,
     },
+    teams: [
+      { id: "0", players: [], hasGuessed: false },
+      { id: "1", players: [], hasGuessed: false },
+    ],
+    teamScoreBoard: [
+      { teamId: "0", score: 0 },
+      { teamId: "1", score: 0 },
+    ],
+    currentTeamDrawer: null,
+    currentTeamDrawerIndex: 0,
+    guessedTeams: [],
   };
   rooms[roomId] = newRoom;
   return newRoom;

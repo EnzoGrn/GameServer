@@ -70,30 +70,64 @@ export function addChangeHostMessage(room: Room, userName: string) {
   }
 }
 
-export function checkMessage(room: Room, player: Player, message: string): boolean{
-  if (message === room?.currentWord && !player.hasGuessed && player.id !== room?.currentDrawer.id) {
-    room?.guessedPlayers.push(player);
-    console.log(room?.guessedPlayers);
-    player.hasGuessed = true;
-    addGuessedMessage(room, player.userName);
-    return true;
-  } else {
-    if (!player.hasGuessed && player.id !== room?.currentDrawer?.id) {
-      const distance = levenshteinDistance(message, room?.currentWord);
+export function checkMessage(room: Room, player: Player, message: string): boolean {
 
-      if (distance < 2 && distance > 0) {
-        const almostCorrectMessage: Message = {
-          text: message + " is close!",
-          timestamp: Date.now(),
-          isPrivate: true,
-          senderId: player.id,
-          bgColor: "yellow",
-          color: "yellow",
-        };
-        room?.messages?.push(almostCorrectMessage);
+  if (room.roomSettings.isClassicMode) {
+
+    if (message === room?.currentWord && !player.hasGuessed && player.id !== room?.currentDrawer.id) {
+      room?.guessedPlayers.push(player);
+      console.log(room?.guessedPlayers);
+      player.hasGuessed = true;
+      addGuessedMessage(room, player.userName);
+      return true;
+    } else {
+      if (!player.hasGuessed && player.id !== room?.currentDrawer?.id) {
+        const distance = levenshteinDistance(message, room?.currentWord);
+  
+        if (distance < 2 && distance > 0) {
+          const almostCorrectMessage: Message = {
+            text: message + " is close!",
+            timestamp: Date.now(),
+            isPrivate: true,
+            senderId: player.id,
+            bgColor: "yellow",
+            color: "yellow",
+          };
+          room?.messages?.push(almostCorrectMessage);
+        }
       }
     }
-    addMessage(room, player.userName, message);
+
+  } else {
+    const team = room.teams.find((team) => team.players.find((p) => p.id === player.id));
+
+    if (message === room?.currentWord && !team.hasGuessed && team.id !== room?.currentTeamDrawer.id) {
+      room?.guessedTeams.push(team);
+      console.log(room?.guessedTeams);
+      team.hasGuessed = true;
+      // TODO: maybe adapt this function
+      addGuessedMessage(room, player.userName);
+      return true;
+    } else {
+      const team = room.teams.find((team) => team.players.find((p) => p.id === player.id));
+     
+      if (!team.hasGuessed && team.id !== room?.currentTeamDrawer?.id) {
+        const distance = levenshteinDistance(message, room?.currentWord);
+  
+        if (distance < 2 && distance > 0) {
+          const almostCorrectMessage: Message = {
+            text: message + " is close!",
+            timestamp: Date.now(),
+            isPrivate: true,
+            senderId: player.id,
+            bgColor: "yellow",
+            color: "yellow",
+          };
+          room?.messages?.push(almostCorrectMessage);
+        }
+      }
+    }
   }
+  addMessage(room, player.userName, message);
   return false;
 }
