@@ -35,14 +35,14 @@ const InvitationBox = ({ invitationCode } : { invitationCode: string }) => {
   };
 
   return (
-    <div className="flex flex-col items-center justify-center bg-white text-gray-800 py-6 px-4 rounded-md shadow-lg my-8">
+    <div className="flex flex-col items-center justify-center border-2 border-[#c44b4a] bg-[#f9f9f9] text-gray-800 py-6 px-4 rounded-lg shadow-lg my-8">
       <p className="text-lg font-semibold mb-4">Invite your friends to join the game!</p>
       <div className="flex items-center gap-4">
         <input
           type="text" value={invitationCode} readOnly
-          className="bg-[#f37b78] text-white px-4 py-2 rounded-md w-full max-w-xs text-center font-mono"
+          className="bg-[#f37b78] text-[#f9f9f9] px-4 py-2 rounded-md w-full max-w-xs text-center font-mono"
         />
-        <button onClick={handleCopy} className="bg-[#f37b78] hover:bg-[#c44b4a] text-white px-4 py-2 rounded-md transition-all">
+        <button onClick={handleCopy} className="bg-[#f37b78] hover:bg-[#c44b4a] text-[#f9f9f9] px-4 py-2 rounded-md transition-all">
           Copy
         </button>
       </div>

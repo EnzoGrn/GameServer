@@ -18,7 +18,7 @@ import p5 from 'p5';
 import { Player, Room, Message, ScoreBoard, Team } from '@/lib/type/types';
 import { MouseData } from '@/lib/type/mouseData';
 import { isDrawing } from '@/lib/player/isDrawing';
-import SwitchButtonMode from '@/components/list/SwitchButtonMode';
+import UserList from '@/components/list/SwitchButtonMode';
 import Chat from '@/components/Chat/Chat';
 import { MessagesProvider } from '@/lib/chat/chatProvider';
 
@@ -229,6 +229,7 @@ export default function Page()
 
   // -- Game State -- //
   const [gameState  , setGameState]   = useState<GameState>('waiting');
+  const [word       , setWord]        = useState<string>('');
   const [gameStarted, setGameStarted] = useState<boolean>(false);
   const [canDraw    , setCanDraw]     = useState<boolean>(false);
   const [timeLeft   , setTimeLeft]    = useState<number>(0);
@@ -448,7 +449,7 @@ export default function Page()
   }, [tool]);
 
   return (
-    <div className="min-h-screen w-full grid grid-cols-[1fr_2fr_1fr] grid-rows-[auto_1fr_auto] gap-2">
+    <div className="min-h-screen w-full grid grid-cols-[auto_2fr_1fr] grid-rows-[auto_1fr_auto] gap-2">
 
       {/* Header */}
       <div className="col-span-3 w-full bg-[#f37b78] text-white p-4 flex justify-between items-center border-b-2 border-b-[#c44b4a]">
@@ -458,11 +459,9 @@ export default function Page()
       </div>
 
       {/* Player List */}
-      <div className="p-4">
-        {thisRoom?.roomSettings && me && socket && (
-          <SwitchButtonMode thisRoom={thisRoom} isClassicModeRoom={thisRoom?.roomSettings.isClassicMode} me={me} socket={socket} />
-        )}
-      </div>
+      {thisRoom?.roomSettings && me && socket && (
+        <UserList thisRoom={thisRoom} isClassicModeRoom={thisRoom?.roomSettings.isClassicMode} me={me} socket={socket} />
+      )}
 
       {/* Canvas Section */}
       <div className="p-4 flex flex-col items-center w-full h-full">
