@@ -1,11 +1,14 @@
 // src/sockets.ts
 import { Server, Socket } from "socket.io";
 import { rooms, createRoom } from "./rooms";
-import { Message, Player, Room, Team } from "./types";
+import { Player, Room, Team } from "./types";
 import { addPlayerToRoom } from "./players";
-import { addJoinMessage, addStartGameConditionMessage, addChangeHostMessage, addDisconnectMessage, checkMessage } from "./messages";
 import { selectWords } from "./words";
 import { changeTeamPlayMode, addPlayerToTeam, removePlayerFromTeam } from "./teams";
+import { ReceivedMessage, SystemMessage } from "./chat/chat";
+import { SendCommandToUser } from "./tools/command";
+import { ErrorColor, OrangeColor, WarningColor } from "./tools/color";
+import { Message } from "./chat/messageType";
 
 function calculateWinner(room: Room) {
   return room.scoreBoard.reduce((prev, current) => (prev.score > current.score ? prev : current));
@@ -135,7 +138,6 @@ export function setupSocket(io: Server) {
       }
 
       // Ajouter le joueur et le message de jointure
-      addJoinMessage(room, userName);
       addPlayerToRoom(room, userId, userAvatar, userName);
 
       // Joindre la room avec Socket.io
@@ -145,6 +147,10 @@ export function setupSocket(io: Server) {
       console.log("User joined room:", room);
       io.to(roomId).emit("room-data-updated", { room: rooms[roomId] });
       io.to(roomId).emit("mode-update", { isClassicMode: room.roomSettings.isClassicMode });
+      io.to(roomId).emit("received-message", {
+        message: SystemMessage(room, `${userName} joined the room!`, OrangeColor) as Message,
+        guessed: room.guessedPlayers as Player[]
+      });
     });
 
     /**
@@ -180,7 +186,10 @@ export function setupSocket(io: Server) {
             delete rooms[room.id];
           }
 
-          addDisconnectMessage(room, player.userName);
+          io.to(room.id).emit("received-message", {
+            message: SystemMessage(room, `${player.userName} left the room!`, OrangeColor) as Message,
+            guessed: room.guessedPlayers as Player[]
+          });
 
           // Si l'hôte se déconnecte, choisir un nouveau hôte aléatoire
           if (player.host && room.players.length > 0) {
@@ -190,7 +199,10 @@ export function setupSocket(io: Server) {
               checker.id === randomPlayer.id ? { ...checker, host: true } : checker
             );
 
-            addChangeHostMessage(room, randomPlayer.userName);
+            io.to(room.id).emit("received-message", {
+              message: SystemMessage(room, `${randomPlayer.userName} is now the room owner!`, OrangeColor) as Message,
+              guessed: room.guessedPlayers as Player[]
+            });
           }
 
           if (room.gameStarted && room.players.length < 2) {
@@ -233,11 +245,16 @@ export function setupSocket(io: Server) {
 
       room.players = room.players.filter((player) => player.id !== mySelf.id);
       room.scoreBoard = room.scoreBoard.filter((score) => score.playerId !== mySelf.id);
-      room.messages.push(message);
+      //room.messages.push(message);
 
       if (room.players.length === 0) {
         delete rooms[roomCode];
       }
+
+      io.to(roomCode).emit("received-message", {
+        message: SystemMessage(room, `${mySelf.userName} left the room!`, OrangeColor) as Message,
+        guessed: room.guessedPlayers as Player[]
+      });
 
       if (mySelf.host && room.players.length > 0) {
         const randomPlayer = room.players[Math.floor(Math.random() * room.players.length)];
@@ -246,7 +263,10 @@ export function setupSocket(io: Server) {
           checker.id === randomPlayer.id ? { ...checker, host: true } : checker
         );
 
-        addChangeHostMessage(room, randomPlayer.userName);
+        io.to(roomCode).emit("received-message", {
+          message: SystemMessage(room, `${randomPlayer.userName} is now the room owner!`, OrangeColor) as Message,
+          guessed: room.guessedPlayers as Player[]
+        });
       }
 
       if (room.gameStarted && room.players.length < 2) {
@@ -312,7 +332,9 @@ export function setupSocket(io: Server) {
     socket.on("start-game", ({ roomCode }) => {
       const room = rooms[roomCode];
       if (!room || room.players.length < 2) {
-        addStartGameConditionMessage(room);
+        io.to(roomCode).emit("received-message", {
+          message: SystemMessage(room, "Room must have at least two players to start the game!", ErrorColor) as Message,
+          guessed: [] as Player[] });
         io.to(roomCode).emit("room-data-updated", { room });
         return;
       }
@@ -329,28 +351,21 @@ export function setupSocket(io: Server) {
       startTurn(roomCode);
     });
 
-    socket.on("message-sent", ({ roomCode, message }) => {
-      message = message.trim();
-      const room = rooms[roomCode];
-      const player = room?.players?.find((player) => player.id === socket.id);
-      if (room && player) {
-        console.log("Message received from:", player.userName, "in room:", roomCode);
-        if (checkMessage(room, player, message) === true) {
-          // TODO: handle it for team mode
+    socket.on("send-message", ({ room_id, notify }) => {
+      const { message, room, isClose } : { message: Message, room: Room | null, isClose: boolean } = ReceivedMessage(io, socket, room_id, notify);
 
-          if (room.roomSettings.isClassicMode) {
-            socket.emit("you-guessed", { room });
-          } else {
-            // get the team of the player
-            const team = room.teams.find((team) => team.players.find((p) => p.id === player.id));
+      if (!message || !room)
+        return;
+      io.to(room_id).emit("received-message", {
+        message: message as Message,
+        guessed: room.guessedPlayers as Player[]
+      });
 
-            for (let player of team.players) {
-              io.to(player.id).emit("you-guessed", { room });
-            }
-          }
-        }
-        // TODO: handle it for team mode
-        io.to(roomCode).emit("new-message", { messages: room.messages });
+      if (isClose) {
+        SendCommandToUser(io, socket, room, "received-message", {
+          message: SystemMessage(room, `${message.content} is close!`, WarningColor) as Message,
+          guessed: room.guessedPlayers as Player[]
+        });
       }
     });
 

@@ -4,7 +4,6 @@
 import Clock from '@/components/element/Clock';
 import WordDisplay, { GameState } from '@/components/element/WordDisplay';
 import Round from '@/components/element/Round';
-import PlayerList from '@/components/list/PlayerList';
 import InvitationBox from '@/components/invitation/Invitation';
 
 // -- Librairies -- //
@@ -20,11 +19,13 @@ import { Player, Room, Message, ScoreBoard, Team } from '@/lib/type/types';
 import { MouseData } from '@/lib/type/mouseData';
 import { isDrawing } from '@/lib/player/isDrawing';
 import SwitchButtonMode from '@/components/list/SwitchButtonMode';
+import Chat from '@/components/Chat/Chat';
+import { MessagesProvider } from '@/lib/chat/chatProvider';
 
 export default function Page()
 {
   // -- The socket -- //
-  const { socket }: { socket: Socket | undefined } = useSocket();
+  const { socket }: { socket: Socket | null } = useSocket();
   const roomRef    = useRef<Room | null>(null);
   const [thisRoom, setRoom] = useState<Room | null>(null);
 
@@ -287,17 +288,6 @@ export default function Page()
     };
   }, [socket, thisRoom]);
 
-  // -- Chat -- //
-  const [message, setMessage] = useState<string>("");
-
-  const SendChatMessage = () => {
-    socket?.emit('message-sent', {
-      roomCode: thisRoom?.id, message
-    });
-
-    setMessage("");
-  }
-
   useEffect(() => {
     if (!socket)
       return;
@@ -315,20 +305,6 @@ export default function Page()
       socket.off("choose-word", handleChooseWord);
     };
   }, [socket]);
-
-  useEffect(() => {
-    if (!socket)
-      return;
-    const handleNewMessage = ({ messages }: { messages: Message[] }) => {
-      setRoom((prevRoom) => prevRoom ? { ...prevRoom, messages } : prevRoom);
-    }
-
-    socket.on("new-message", handleNewMessage);
-
-    return () => {
-      socket.off("new-message", handleNewMessage);
-    };
-  }, [socket, thisRoom]);
 
   useEffect(() => {
     if (!socket)
@@ -472,94 +448,103 @@ export default function Page()
   }, [tool]);
 
   return (
-    <div className="flex flex-col min-h-screen w-full">
+    <div className="min-h-screen w-full grid grid-cols-[1fr_2fr_1fr] grid-rows-[auto_1fr_auto] gap-2">
 
       {/* Header */}
-      <div className="w-full bg-[#f37b78] text-white p-4 flex justify-between items-center border-b-2 border-b-[#c44b4a]">
+      <div className="col-span-3 w-full bg-[#f37b78] text-white p-4 flex justify-between items-center border-b-2 border-b-[#c44b4a]">
         <Clock time={timeLeft} />
         <WordDisplay gameState={gameState} word={thisRoom?.currentWord?.toLowerCase()} />
         <Round currentRound={thisRoom?.currentRound} totalRounds={thisRoom?.roomSettings.rounds} />
       </div>
 
-      {/* Main Section */}
-      <div className="flex flex-col md:flex-row flex-grow h-full">
-
+      {/* Player List */}
+      <div className="p-4">
         {thisRoom?.roomSettings && me && socket && (
-          <>
-          {console.log("thisRoom?.roomSettings.isClassicMode TEST", thisRoom?.roomSettings.isClassicMode)}
           <SwitchButtonMode thisRoom={thisRoom} isClassicModeRoom={thisRoom?.roomSettings.isClassicMode} me={me} socket={socket} />
-          </>
         )}
+      </div>
 
-        
+      {/* Canvas Section */}
+      <div className="p-4 flex flex-col items-center w-full h-full">
 
-        {/* Zone de dessin */}
-        <div className="flex-1 p-4 flex flex-col items-center order-1 md:order-2">
-
-          {/* Canvas */}          
-          <div className="relative w-full">
-            <div ref={canvasParentRef} className="absolute w-full h-64 md:h-96 bg-white border border-gray-300 rounded-md mb-4">
-              {/* The canvas will dynamically being load here.. */}
-            </div>
-
-            {/* If the game is not start */}
-            {!gameStarted &&
-              <div className="absolute w-full h-64 md:h-96 bg-gray-800 bg-opacity-50 border border-gray-900 rounded-md mb-4 flex justify-center items-center z-100">
-                {/* Settings of the game */}
-              </div>
-            }
-
-            {/* If the game is started, and you can't draw */}
-            {gameStarted && !canDraw &&
-              <div className="absolute w-full h-64 md:h-96 bg-gray-800 bg-opacity-50 border border-gray-900 rounded-md mb-4 flex justify-center items-center z-100">
-                {isChoosingWord && isDrawing(me!, thisRoom?.currentDrawer!) ?
-                  (
-                    <div className="flex-col justify-center items-center">
-                      <div className='text-white font-bold text-lg text-center'>
-                        Choose a word
-                      </div>
-                      <div className="w-full flex justify-center m-4">
-                        {wordList?.length > 0 && wordList?.map((word) => (
-                          <button
-                            key={word?.id} onClick={() => chooseWord(word?.text)}
-                            className="bg-white hover:bg-slate-100 text-gray-800 px-6 py-2 rounded-md text-lg mr-4"
-                          >
-                            {word?.text}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  ) : (
-                    <div className='text-white font-lg'>
-                      {thisRoom?.currentDrawer?.userName} is choosing the word!
-                    </div>
-                  )
-                }
-              </div>
-            }
-
-            {/* If the game is started, and you can't draw */}
-            {!gameStarted && !canDraw && showScore &&
-              <div className="absolute w-full h-64 md:h-96 bg-gray-800 bg-opacity-50 border border-gray-900 rounded-md mb-4 flex justify-center items-center z-100">
-                <div className="flex-col justify-center items-center">
-                  <div
-                    className="relative w-[124px] h-[124px] flex items-center justify-center bg-center bg-cover"
-                    style={{ backgroundImage: "url('score.gif')" }}
-                  ></div>
-                  <div className='text-white font-lg'>
-                    {/*winnerRef.current ? winnerRef.current.id : "No winner"} has won! With a score of {winnerRef.current?.score ?? 0} points!*/}
-                  </div>
-                </div>
-             </div>
-            }
-
-            <div ref={hiddenCanvasRef} className="relative top-0 left-0 w-full h-64 md:h-96 bg-transparent z-[-1]" />
+        {/* Canvas */}          
+        <div className="relative w-full">
+          <div ref={canvasParentRef} className="absolute w-full h-64 md:h-96 bg-white border border-gray-300 rounded-md mb-4">
+            {/* The canvas will dynamically being load here.. */}
           </div>
 
-          {/* Tools (brush) */}
+          {/* If the game is not start */}
+          {!gameStarted &&
+            <div className="absolute w-full h-64 md:h-96 bg-gray-800 bg-opacity-50 border border-gray-900 rounded-md mb-4 flex justify-center items-center z-100">
+              {/* Settings of the game */}
+            </div>
+          }
 
-          {thisRoom?.roomSettings.isClassicMode && gameStarted && canDraw && isDrawing(me!, thisRoom?.currentDrawer) && (
-           <div className="flex items-center space-x-2 md:space-x-4">
+          {/* If the game is started, and you can't draw */}
+          {gameStarted && !canDraw &&
+            <div className="absolute w-full h-64 md:h-96 bg-gray-800 bg-opacity-50 border border-gray-900 rounded-md mb-4 flex justify-center items-center z-100">
+              {isChoosingWord && isDrawing(me!, thisRoom?.currentDrawer!) ?
+                (
+                  <div className="flex-col justify-center items-center">
+                    <div className='text-white font-bold text-lg text-center'>
+                      Choose a word
+                    </div>
+                    <div className="w-full flex justify-center m-4">
+                      {wordList?.length > 0 && wordList?.map((word) => (
+                        <button
+                          key={word?.id} onClick={() => chooseWord(word?.text)}
+                          className="bg-white hover:bg-slate-100 text-gray-800 px-6 py-2 rounded-md text-lg mr-4"
+                        >
+                          {word?.text}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div className='text-white font-lg'>
+                    {thisRoom?.currentDrawer?.userName} is choosing the word!
+                  </div>
+                )
+              }
+            </div>
+          }
+
+          {/* If the game is started, and you can't draw */}
+          {!gameStarted && !canDraw && showScore &&
+            <div className="absolute w-full h-64 md:h-96 bg-gray-800 bg-opacity-50 border border-gray-900 rounded-md mb-4 flex justify-center items-center z-100">
+              <div className="flex-col justify-center items-center">
+                <div
+                  className="relative w-[124px] h-[124px] flex items-center justify-center bg-center bg-cover"
+                  style={{ backgroundImage: "url('score.gif')" }}
+                ></div>
+                <div className='text-white font-lg'>
+                  {/*winnerRef.current ? winnerRef.current.id : "No winner"} has won! With a score of {winnerRef.current?.score ?? 0} points!*/}
+                </div>
+              </div>
+            </div>
+          }
+
+          <div ref={hiddenCanvasRef} className="relative top-0 left-0 w-full h-64 md:h-96 bg-transparent z-[-1]" />
+        </div>
+
+        {/* Tools (brush) */}
+
+        {thisRoom?.roomSettings.isClassicMode && gameStarted && canDraw && isDrawing(me!, thisRoom?.currentDrawer) && (
+          <div className="flex items-center space-x-2 md:space-x-4">
+          <button onClick={() => setTool('pencil')}>Pencil</button>
+          <button onClick={() => setTool('eraser')}>Eraser</button>
+
+          <button
+            onClick={clearCanvas}
+            className="bg-red-400 px-3 md:px-4 py-1 md:py-2 rounded-md text-white"
+          >
+            Clear
+          </button>
+        </div>
+        )}
+
+        {(!thisRoom?.roomSettings.isClassicMode && gameStarted && canDraw && thisRoom?.currentTeamDrawer?.players.find((player : Player) => player.id === me?.id)) && (
+          <div className="flex items-center space-x-2 md:space-x-4">
             <button onClick={() => setTool('pencil')}>Pencil</button>
             <button onClick={() => setTool('eraser')}>Eraser</button>
 
@@ -570,68 +555,30 @@ export default function Page()
               Clear
             </button>
           </div>
-          )}
+        )}
 
-          {(!thisRoom?.roomSettings.isClassicMode && gameStarted && canDraw && thisRoom?.currentTeamDrawer?.players.find((player : Player) => player.id === me?.id)) && (
-            <div className="flex items-center space-x-2 md:space-x-4">
-              <button onClick={() => setTool('pencil')}>Pencil</button>
-              <button onClick={() => setTool('eraser')}>Eraser</button>
-
-              <button
-                onClick={clearCanvas}
-                className="bg-red-400 px-3 md:px-4 py-1 md:py-2 rounded-md text-white"
-              >
-                Clear
-              </button>
-            </div>
-          )}
-
-          {/* Bouton pour lancer la partie */}
-          {!gameStarted && meRef.current?.host === true && (
-            <div className="w-full flex justify-center m-4">
-              <button
-                onClick={() => handleStartGame()}
-                className="bg-green-500 hover:bg-green-600 text-white px-6 py-2 rounded-md text-lg font-extrabold"
-              >
-                Start!
-              </button>
-            </div>
-          )}
-        </div>
-
-        {/* Chat */}
-        <div className="w-full md:w-1/4 h-full p-4 bg-white shadow-md rounded-b-md border-[#c44b4a] border-b-2 border-l-2 flex flex-col order-3 md:order-3">
-          <h2 className="text-xl font-semibold mb-4">Chat</h2>
-          <div className="flex-1 overflow-y-auto space-y-2 min-h-96 max-h-96">
-            {/* Boucle à travers les messages dans room.messages */}
-            {thisRoom?.messages?.filter((msg: Message) => msg.timestamp >= (me?.timestamp ?? Infinity) || msg.timestamp === 0).map((msg: Message, index: number) => (
-                !msg.isPrivate || msg.isPrivate && msg.senderId === socket?.id ? (
-                  <div key={index} className="bg-red-100 p-2 rounded-md">
-                    {msg.text}
-                  </div>
-                ) : null
-              ))}
-          </div>
-          <div className="mt-4 flex">
-            <input
-              type="text"
-              value={message}
-              onChange={(e) => setMessage(e.target.value)}
-              placeholder="Votre message"
-              className="w-full p-2 border rounded-l-md border-[#c44b4a] focus:outline-none"
-            />
+        {/* Bouton pour lancer la partie */}
+        {!gameStarted && meRef.current?.host === true && (
+          <div className="w-full flex justify-center m-4">
             <button
-              onClick={() => SendChatMessage()}
-              className="bg-[#f37b78] hover:bg-[#c44b4a] text-white px-3 md:px-4 rounded-r-md"
+              onClick={() => handleStartGame()}
+              className="bg-green-500 hover:bg-green-600 text-white px-6 py-2 rounded-md text-lg font-extrabold"
             >
-              Envoyer
+              Start!
             </button>
           </div>
-        </div>
+        )}
+      </div>
+
+      {/* Chat */}
+      <div className="row-span-2 p-4">
+        <MessagesProvider>
+          <Chat room={thisRoom} />
+        </MessagesProvider>
       </div>
 
       {/* Footer with the invitation link */}
-      <footer className="w-full flex justify-center">
+      <footer className="col-span-2 p-4 flex items-end justify-center">
         <InvitationBox invitationCode={inviteLink} />
       </footer>
     </div>

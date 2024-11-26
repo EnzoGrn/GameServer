@@ -19,7 +19,6 @@ export interface Player {
 export interface Room {
     id: string;
     players: Player[];
-    messages: Message[];
     scoreBoard: ScoreBoard[];
     customWords: string[];
     guessedPlayers: Player[];
@@ -46,15 +45,6 @@ export interface Room {
     currentTeamDrawer: Team;
     currentTeamDrawerIndex: number;
     guessedTeams: Team[];
-}
-
-export interface Message {
-    text: string;
-    timestamp: number;
-    bgColor: string;
-    color: string;
-    isPrivate?: boolean;
-    senderId?: string;
 }
 
 export interface Team {
