@@ -3,18 +3,17 @@ import { useSocket } from "../provider/SocketProvider";
 import { useMessages } from "@/lib/chat/chatProvider";
 import { useEffect, useRef, useState } from "react";
 import { SendMessage } from "@/lib/chat/message";
-import { GetPlayerById } from "@/lib/player/getter";
-import { Player, Room } from "@/lib/type/types";
 import { Socket } from 'socket.io-client';
+import { Lobby } from "@/lib/room/type";
 import MessageView from "./Message";
+import { User } from "@/lib/player/type";
+import { GetPlayerWithId } from "@/lib/room/function";
+import { useRoom } from "@/lib/room/RoomProvider";
 
-interface ChatProps {
-  room : Room | null;
-}
-
-const Chat: React.FC<ChatProps> = ({ room }) => {
-  const { socket } : { socket: Socket | null } = useSocket();
-  const { messages, newMessage } : { messages: Message[], newMessage: (message: Message) => void } = useMessages();
+const Chat = () => {
+  const { socket               } = useSocket();
+  const { room                 } = useRoom();
+  const { messages, newMessage } = useMessages();
 
   const messagesEndRef = useRef<HTMLDivElement>(null); // Ref to the last message displayed in the chat.
 
@@ -23,32 +22,39 @@ const Chat: React.FC<ChatProps> = ({ room }) => {
   useEffect(() => {
     if (!socket)
       return;
-    socket.on('received-message', ({ message, guessed } : { message: Message, guessed: Player[] }) => {
-      console.log("[SYSTEM] Message received: " + message.content + " from " + message.sender_name + " in room " + room?.id);
+    socket.on('message-received', (message: Message) => {
+      console.log("[message-received]: ", message);
 
-      receivedMessage(message);
-
-      if (room != null)
-        room.guessedPlayers = guessed;
+      messageReceived(message);
     });
 
     return () => {
-      socket.off('received-message');
+      socket.off('message-received');
     }
-  }, [room]);
+  }, [socket]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  const receivedMessage = (message: Message) => {
+  const messageReceived = (message: Message) => {
     if (!room)
       return;
     try {
       if (message.type !== MessageType.SECRET)
         newMessage(message);
-      else if (room.currentDrawer?.id === socket?.id || GetPlayerById(room, socket!.id!)?.hasGuessed === true || message.sender_id === socket?.id)
-        newMessage(message);
+      else if (room.settings.gameMode === Lobby.GameMode.Classic) {
+        const user: User.Player | undefined = room.currentDrawer as User.Player | undefined;
+
+        if (user?.profile?.id === socket?.id || GetPlayerWithId(room, socket!.id!)?.hasGuessed === true || message.sender_id === socket?.id)
+          newMessage(message);
+      } else {
+        const users: User.Player[]           = room.currentDrawer as User.Player[] | [];
+        const me   : User.Player | undefined = users.find((player: User.Player) => player.profile.id === socket?.id);
+
+        if (me !== undefined || message.sender_id === socket?.id)
+          newMessage(message);
+      }
     } catch (err) {
       console.error(err);
     }
@@ -58,7 +64,7 @@ const Chat: React.FC<ChatProps> = ({ room }) => {
     if (!room_id || !room || text === '' || !socket)
       return;
     try {
-      const username = GetPlayerById(room, socket.id!)?.userName;
+      const username = GetPlayerWithId(room, socket.id!)?.profile.name;
 
       SendMessage(socket, room_id, text, username);
       setMessage('');

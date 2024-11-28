@@ -10,9 +10,9 @@ export const SendMessage = (socket: Socket, room_id: string, text: string, usern
         timestamp  : Date.now()
     };
 
-    socket?.emit('send-message', {
-        room_id: room_id,
-        notify : message
+    socket?.emit('sent-message', {
+        room_id: room_id as string,
+        message: message as Message
     });
 
     return message;

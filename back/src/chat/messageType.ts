@@ -7,7 +7,7 @@ export enum MessageType {
     SYSTEM,  // System message.
     SECRET   // Secret message (private, only shown to all the users that found the word for example).
 }
-  
+
 /*
  * @brief Interface for the message.
  * @note If the message doesn't have a sender_id, it's a system message.

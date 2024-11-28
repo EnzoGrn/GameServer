@@ -1,21 +1,22 @@
+import { useRoom } from '@/lib/room/RoomProvider';
 import { useSocket } from '../provider/SocketProvider';
-import { Player, Room } from '@/lib/type/types';
 
-const ListTeams = ({ room, player }: { room: Room | null, player ?: Player }) => {
-  // -- Socket -- //
+const ListTeams = () => {
   const { socket } = useSocket();
+  const { room   } = useRoom();
 
+  // --  TODO: Implement team view & commande
   // Make a function that allow a player to switch team
-  const switchTeam = () => {
+  /*const switchTeam = () => {
       socket?.emit('switch-player-team', {
           roomId: room?.id,
           playerId: player?.id,
       });
-  };
+  };*/
 
   return (
     <div className="flex-grow flex flex-col h-full p-4 order-2 min-w-80 max-w-80">
-      <div className="grid gap-4">
+      {/*<div className="grid gap-4">
         {room?.teams.map((team, index) => (
           <div key={index} className="p-4 rounded-lg shadow-md">
             <h3 className="font-bold mb-4">Team {index + 1}</h3>
@@ -41,7 +42,7 @@ const ListTeams = ({ room, player }: { room: Room | null, player ?: Player }) =>
                       />
                     }
                     <div className="w-12 rounded-full">
-                      <img src="https://img.daisyui.com/images/stock/photo-1534528741775-53994a69daeb.webp" /> {/* TODO: Put profile picture */}
+                      <img src={player.profile.avatar} />
                     </div>
                   </div>
                 </li>
@@ -50,7 +51,7 @@ const ListTeams = ({ room, player }: { room: Room | null, player ?: Player }) =>
           </div>
         ))}
       </div>
-      <button onClick={switchTeam} className="mt-4 bg-blue-500 hover:bg-blue-600 text-white py-2 rounded-md font-medium transition-all">Switch Team</button>
+      <button onClick={switchTeam} className="mt-4 bg-blue-500 hover:bg-blue-600 text-white py-2 rounded-md font-medium transition-all">Switch Team</button>*/}
     </div>
   );
 }

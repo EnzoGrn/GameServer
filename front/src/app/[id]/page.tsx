@@ -21,11 +21,15 @@ import { isDrawing } from '@/lib/player/isDrawing';
 import UserList from '@/components/list/SwitchButtonMode';
 import Chat from '@/components/Chat/Chat';
 import { MessagesProvider } from '@/lib/chat/chatProvider';
+import { useRoom } from '@/lib/room/RoomProvider';
 
 export default function Page()
 {
   // -- The socket -- //
+
   const { socket }: { socket: Socket | null } = useSocket();
+  const { room } = useRoom();
+
   const roomRef    = useRef<Room | null>(null);
   const [thisRoom, setRoom] = useState<Room | null>(null);
 
@@ -459,9 +463,7 @@ export default function Page()
       </div>
 
       {/* Player List */}
-      {thisRoom?.roomSettings && me && socket && (
-        <UserList thisRoom={thisRoom} isClassicModeRoom={thisRoom?.roomSettings.isClassicMode} me={me} socket={socket} />
-      )}
+      <UserList />
 
       {/* Canvas Section */}
       <div className="p-4 flex flex-col items-center w-full h-full">
@@ -572,7 +574,7 @@ export default function Page()
       {/* Chat */}
       <div className="row-span-2 p-4">
         <MessagesProvider>
-          <Chat room={thisRoom} />
+          <Chat />
         </MessagesProvider>
       </div>
 

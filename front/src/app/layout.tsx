@@ -3,6 +3,7 @@ import { DM_Sans } from 'next/font/google'
 import "./globals.css";
 import { SocketProvider } from "@/components/provider/SocketProvider";
 import React from "react";
+import { RoomProvider } from "@/lib/room/RoomProvider";
 
 /*
  * @brief Main font for the application.
@@ -31,9 +32,11 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
       <body className={font.className}>
         <React.StrictMode>
           <SocketProvider>
-            <div className={`flex justify-center items-center flex-col overflow-hidden bg-[url('assets/background.png')]`}>
-              {children}
-            </div>
+            <RoomProvider>
+              <div className={`flex justify-center items-center flex-col overflow-hidden bg-[url('assets/background.png')]`}>
+                {children}
+              </div>
+            </RoomProvider>
           </SocketProvider>
         </React.StrictMode>
       </body>

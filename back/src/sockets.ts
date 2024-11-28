@@ -1,6 +1,6 @@
 // src/sockets.ts
 import { Server, Socket } from "socket.io";
-import { rooms, createRoom } from "./rooms";
+import { rooms } from "./rooms";
 import { Player, Room, ScoreBoard, Team } from "./types";
 import { addPlayerToRoom } from "./players";
 import { selectWords } from "./words";
@@ -9,6 +9,8 @@ import { ReceivedMessage, SystemMessage } from "./chat/chat";
 import { SendCommandToUser } from "./tools/command";
 import { ErrorColor, OrangeColor, WarningColor } from "./tools/color";
 import { Message } from "./chat/messageType";
+import { Lobby } from "./room/type";
+import { User } from "./user/type";
 
 function calculateWinner(room: Room) {
   return room.scoreBoard.reduce((prev, current) => (prev.score > current.score ? prev : current));
@@ -18,139 +20,45 @@ export function setupSocket(io: Server) {
   io.on("connection", (socket: Socket) => {
     console.log("A user connected:", socket.id);
 
-    /**
-     * @function
-     * @name socket.on("get-all-rooms")
-     * @description
-     * Cette fonction écoute l'événement "get-all-rooms" émis par le client. Lorsqu'il est reçu,
-     * elle déclenche l'émission de l'événement "send-all-rooms" qui contient la liste actuelle des rooms.
-     *
-     * @event
-     * @name get-all-rooms
-     * @description
-     * L'événement "get-all-rooms" est émis par le client pour demander les données des rooms
-     * disponibles à l'instant.
-     *
-     * @event
-     * @name send-all-rooms
-     * @description
-     * L'événement "send-all-rooms" est émis en réponse à "get-all-rooms" et contient la liste actuelle des rooms
-     * disponibles. Il est envoyé au client afin de mettre à jour l'interface utilisateur.
-     *
-     * @returns {void} Cette fonction ne renvoie rien.
-     */
-    socket.on("get-all-rooms", () => {
-      socket.emit("send-all-rooms", rooms);
+    socket.on("create-room", (profile: User.Profile) => {
+      console.log("[create-room | " + socket.id + "]: ", profile);
+
+      var newRoom: Lobby.Room = Lobby.CreateRoom(profile, false);
+
+      socket.emit("room-created", newRoom as Lobby.Room);
+      socket.join(newRoom.id);
+
+      socket.emit("message-received", SystemMessage("You are the host!", OrangeColor) as Message);
     });
 
-    socket.on("get-room", (roomId) => {
-      socket.emit("send-room", rooms[roomId]);
-    });
+    socket.on("join-room", (data: any) => {
+      const { profile, code } : { profile: User.Profile, code: string | undefined } = data;
 
-    /**
-     * @function
-     * @name socket.on("create-room")
-     * @description
-     * Cette fonction écoute l'événement "create-room" émis par le client. Lorsqu'il est reçu,
-     * elle crée une nouvelle room avec les données reçues et émet l'événement "room-data-updated"
-     * pour informer les autres clients de la mise à jour.
-     *
-     * @event
-     * @name create-room
-     * @description
-     * L'événement "create-room" est émis par le client pour créer une nouvelle room avec les données
-     * fournies (roomId, userAvatar, userId, host, userName, timestamp).
-     *
-     * @event
-     * @name room-data-updated
-     * @description
-     * L'événement "room-data-updated" est émis pour informer les clients de la mise à jour des données
-     * de la room spécifiée.
-     *
-     * @param {Object} data Les données de la room à créer.
-     * @param {string} data.roomId L'identifiant de la room.
-     * @param {string} data.userAvatar L'avatar de l'utilisateur.
-     * @param {string} data.userId L'identifiant de l'utilisateur.
-     * @param {boolean} data.host Indique si l'utilisateur est l'hôte de la room.
-     * @param {string} data.userName Le nom de l'utilisateur.
-     * @param {number} data.timestamp Le timestamp de la connexion de l'utilisateur.
-     *
-     * @returns {void} Cette fonction ne renvoie rien.
-     */
-    socket.on("create-room", ({ roomId, userAvatar, userId, userName }) => {
-      const roomTimestamp = Date.now();
-      const initialPlayer: Player = {
-        id: userId,
-        userAvatar,
-        userName,
-        host: true,
-        hasGuessed: false,
-        kicksToOut: 0,
-        kicksGot: [],
-        timestamp: Date.now()
-      };
-      const newRoom = createRoom(roomId, initialPlayer, roomTimestamp);
+      console.log("[join-room | " + socket.id + "]: ", profile, code);
 
-      console.log("Room created with id:", roomId);
+      const { room, isNew } : { room: Lobby.Room, isNew: boolean } = Lobby.JoinRoom(profile, code);
 
-      if (!newRoom.roomSettings.isClassicMode) {
-        addPlayerToTeam(newRoom, initialPlayer, newRoom.teams[0]);
+      socket.emit("room-joined", room as Lobby.Room);
+      socket.join(room.id);
+
+      if (isNew) {
+        socket.emit("message-received", SystemMessage("Need to wait for another player to start the game!", OrangeColor) as Message);
+      } else {
+        io.to(room.id).emit("message-received", SystemMessage(`${profile.name} joined the room!`, OrangeColor) as Message);
+        io.to(room.id).emit("update-users", room.users as User.Player[]);
+
+        if (!room.isStarted && room.isDefault && room.users.length === 2) {
+          // TODO: Start the game
+        }
       }
-
-      socket.join(roomId);
-      io.to(roomId).emit("room-data-updated", { room: newRoom });
     });
 
-    /**
-     * @function
-     * @name socket.on("join-room")
-     * @description
-     * Cette fonction écoute l'événement "join-room" émis par le client. Lorsqu'il est reçu,
-     * elle ajoute l'utilisateur à la room spécifiée et émet l'événement "user-is-joined" pour
-     * informer les autres clients de la connexion de l'utilisateur.
-     *
-     * @event
-     * @name join-room
-     * @description
-     * L'événement "join-room" est émis par le client pour rejoindre une room spécifique.
-     *
-     * @event
-     * @name user-is-joined
-     * @description
-     * L'événement "user-is-joined" est émis pour informer les clients de la connexion d'un nouvel utilisateur
-     * à la room spécifiée.
-     *
-     * @param {Object} data Les données de la room à rejoindre.
-     * @param {string} data.roomId L'identifiant de la room.
-     * @param {string} data.userAvatar L'avatar de l'utilisateur.
-     * @param {string} data.userId L'identifiant de l'utilisateur.
-     * @param {string} data.userName Le nom de l'utilisateur.
-     * @param {number} data.timestamp Le timestamp de la connexion de l'utilisateur.
-     *
-     * @returns {void} Cette fonction ne renvoie rien.
-     */
-    socket.on("join-room", ({ roomId, userAvatar, userId, userName }) => {
-      // Vérifier si la room existe
-      const room = rooms[roomId];
-      if (!room) {
-        console.error(`Room ${roomId} does not exist.`);
-        return;
-      }
+    socket.on("sent-message", (data: any) => {
+      const { room_id, message } : { room_id: string, message: Message } = data;
 
-      // Ajouter le joueur et le message de jointure
-      addPlayerToRoom(room, userId, userAvatar, userName);
+      console.log("[sent-message | " + socket.id + "]: ", room_id, message);
 
-      // Joindre la room avec Socket.io
-      socket.join(roomId);
-
-      // Mettre à jour les données de la room pour tous les clients
-      console.log("User joined room:", room);
-      io.to(roomId).emit("room-data-updated", { room: rooms[roomId] });
-      io.to(roomId).emit("mode-update", { isClassicMode: room.roomSettings.isClassicMode });
-      io.to(roomId).emit("received-message", {
-        message: SystemMessage(room, `${userName} joined the room!`, OrangeColor) as Message,
-        guessed: room.guessedPlayers as Player[]
-      });
+      io.to(room_id).emit("message-received", message as Message);
     });
 
     /**
@@ -187,7 +95,7 @@ export function setupSocket(io: Server) {
           }
 
           io.to(room.id).emit("received-message", {
-            message: SystemMessage(room, `${player.userName} left the room!`, OrangeColor) as Message,
+            message: SystemMessage(`${player.userName} left the room!`, OrangeColor) as Message,
             guessed: room.guessedPlayers as Player[]
           });
 
@@ -200,7 +108,7 @@ export function setupSocket(io: Server) {
             );
 
             io.to(room.id).emit("received-message", {
-              message: SystemMessage(room, `${randomPlayer.userName} is now the room owner!`, OrangeColor) as Message,
+              message: SystemMessage(`${randomPlayer.userName} is now the room owner!`, OrangeColor) as Message,
               guessed: room.guessedPlayers as Player[]
             });
           }
@@ -252,7 +160,7 @@ export function setupSocket(io: Server) {
       }
 
       io.to(roomCode).emit("received-message", {
-        message: SystemMessage(room, `${mySelf.userName} left the room!`, OrangeColor) as Message,
+        message: SystemMessage(`${mySelf.userName} left the room!`, OrangeColor) as Message,
         guessed: room.guessedPlayers as Player[]
       });
 
@@ -264,7 +172,7 @@ export function setupSocket(io: Server) {
         );
 
         io.to(roomCode).emit("received-message", {
-          message: SystemMessage(room, `${randomPlayer.userName} is now the room owner!`, OrangeColor) as Message,
+          message: SystemMessage(`${randomPlayer.userName} is now the room owner!`, OrangeColor) as Message,
           guessed: room.guessedPlayers as Player[]
         });
       }
@@ -333,7 +241,7 @@ export function setupSocket(io: Server) {
       const room = rooms[roomCode];
       if (!room || room.players.length < 2) {
         io.to(roomCode).emit("received-message", {
-          message: SystemMessage(room, "Room must have at least two players to start the game!", ErrorColor) as Message,
+          message: SystemMessage("Room must have at least two players to start the game!", ErrorColor) as Message,
           guessed: [] as Player[] });
         io.to(roomCode).emit("room-data-updated", { room });
         return;
@@ -363,7 +271,7 @@ export function setupSocket(io: Server) {
 
       if (isClose) {
         SendCommandToUser(io, socket, room, "received-message", {
-          message: SystemMessage(room, `${message.content} is close!`, WarningColor) as Message,
+          message: SystemMessage(`${message.content} is close!`, WarningColor) as Message,
           guessed: room.guessedPlayers as Player[]
         });
       }
