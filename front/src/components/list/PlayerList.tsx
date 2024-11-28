@@ -4,28 +4,57 @@ import { isDrawing } from "@/lib/player/isDrawing";
 // -- Types -- //
 import { Player } from "@/lib/type/types";
 
-const PlayerList = ({ players, me, drawer, scoreBoard }: { players?: Player[], me?: Player, drawer?: Player, scoreBoard?: any[] }) => {
+const PlayerList = ({ players, me, drawer, scoreBoard, guessed }: { players?: Player[], me?: Player, drawer?: Player, scoreBoard?: any[], guessed ?: Player[] }) => {
+
+  const hasGuessed = (player: Player, guessed?: Player[]): boolean => {
+    if (!guessed) return false;
+    return guessed.some((guessedPlayer: Player) => guessedPlayer.id === player.id);
+  }
+
   return (
-    <div className="flex-grow flex flex-col w-full h-full p-4 order-2">
-      <ul className="flex-grow overflow-auto">
-        {players &&
-          players.map((player: Player, index: number) => (
-            <li
-              key={player.id}
-              className={`p-2 rounded-md mb-2 flex flex-row items-center border-2 border-[#c44b4a] ${isDrawing(player, drawer) ? 'bg-slate-200' : 'bg-gray-100'}`}
-            >
-              <span className="font-bold mr-4">#{index + 1}</span>
-              <div className="flex flex-col items-center mr-2">
-                <span className={`text-center ${me?.id === player.id ? 'text-blue-500' : 'text-gray-800'}`}>
-                  {player.userName} {me?.id === player.id ? '(You)' : ''}
+    <div className="flex-grow flex flex-col h-full p-4 order-2 min-w-80 max-w-80">
+      <ul className="flex-grow overflow-visible">
+        {players && players.map((player: Player, index: number) => (
+          <li
+            key={player.id}
+            className={`p-2 rounded-md mb-2 flex flex-row items-center border-2 border-[#c44b4a] overflow-visible ${hasGuessed(player, guessed) ? 'bg-[#22c553]' : 'bg-[#f9f9f9]'}`}
+          >
+            <span className="font-bold mr-4">#{index + 1}</span>
+            <div className="flex justify-between w-full">
+              <div className="flex flex-col items-start mr-2 w-1/2 max-w-[1/2]">
+                <span className={`text-start ${me?.id === player.id ? 'text-blue-500' : 'text-gray-800'} text-nowrap`}>
+                  {player.userName.slice(0, 12)} {me?.id === player.id ? '(You)' : ''}
                 </span>
                 <span className="font-extralight">
                   {scoreBoard?.find((score: any) => score.playerId === player.id)?.score || 0} points
                 </span>
               </div>
-              <span>{isDrawing(player, drawer) ? '(Draw)' : ''}</span>
-            </li>
-          ))}
+              {isDrawing(player, drawer) &&
+                <div
+                  className="w-[48px] h-[48px] bg-center bg-cover"
+                  style={{
+                    backgroundImage: "url('pen.gif')",
+                    transform: 'translateX(15px)',
+                  }}
+                />
+              }
+              <div className="avatar indicator">
+                {player.host === true &&
+                  <div
+                    className="indicator-item w-[24px] h-[24px] bg-center bg-cover"
+                    style={{
+                      backgroundImage: "url('crown.gif')",
+                      transform: 'scaleX(-1) translateY(-10px) translateX(-10px)',
+                    }}
+                  />
+                }
+                <div className="w-12 rounded-full">
+                  <img src="https://img.daisyui.com/images/stock/photo-1534528741775-53994a69daeb.webp" /> {/* TODO: Put profile picture */}
+                </div>
+              </div>
+            </div>
+          </li>
+        ))}
       </ul>
     </div>
   );

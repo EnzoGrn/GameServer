@@ -1,7 +1,7 @@
 // src/sockets.ts
 import { Server, Socket } from "socket.io";
 import { rooms, createRoom } from "./rooms";
-import { Player, Room, Team } from "./types";
+import { Player, Room, ScoreBoard, Team } from "./types";
 import { addPlayerToRoom } from "./players";
 import { selectWords } from "./words";
 import { changeTeamPlayMode, addPlayerToTeam, removePlayerFromTeam } from "./teams";
@@ -481,8 +481,10 @@ export function setupSocket(io: Server) {
 
       if (room.roomSettings.isClassicMode) {
         room.guessedPlayers?.forEach((player) => {
-          room.scoreBoard.find((score) => score.playerId === player.id).score += 100;
+          room.scoreBoard.find((score: ScoreBoard) => score.playerId === player.id).score += 100;
         });
+
+        room.guessedPlayers = [];
 
         io.to(roomId).emit("turn-ended", {
           scores: room.scoreBoard,
