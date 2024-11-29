@@ -126,4 +126,12 @@ export namespace Lobby { // Drawing Together
 
         return { room: Lobby.CreateRoom(profile, true, code), isNew: true };
     }
+
+    export const GetPlayerInRoom = (room: Lobby.Room, id: string): User.Player | null => {
+        for (var i = 0; i < room.users.length; i++) {
+            if (room.users[i].profile.id === id)
+                return room.users[i];
+        }
+        return null;
+    }
 }

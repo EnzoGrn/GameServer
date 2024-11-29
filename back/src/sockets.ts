@@ -106,7 +106,19 @@ export function setupSocket(io: Server) {
 
       console.log("[sent-message | " + socket.id + "]: ", room_id, message);
 
-      io.to(room_id).emit("message-received", message as Message);
+      const res: { message: Message, room: Lobby.Room | null, isClose: boolean } = ReceivedMessage(io, socket, room_id, message);
+      
+      console.log(res.message);
+
+      if (!message || !res.room)
+        return;
+      io.to(room_id).emit("message-received", res.message as Message);
+
+      if (res.isClose) {
+        SendCommandToUser(io, socket, res.room, "message-received", SystemMessage(`${message.content} is close!`, WarningColor) as Message);
+      }
+
+      io.to(room_id).emit("update-users", res.room.users as User.Player[]);
     });
 
     socket.on("word-chosen", (data: any) => {
@@ -264,56 +276,6 @@ export function setupSocket(io: Server) {
       io.to(roomCode).emit("room-data-updated", { room: rooms[roomCode] });
     });
 
-    /*socket.on("start-game", ({ roomCode }) => {
-      const room = rooms[roomCode];
-      if (!room || room.players.length < 2) {
-        io.to(roomCode).emit("received-message", {
-          message: SystemMessage("Room must have at least two players to start the game!", ErrorColor) as Message,
-          guessed: [] as Player[] });
-        io.to(roomCode).emit("room-data-updated", { room });
-        return;
-      }
-      room.gameStarted = true;
-
-      if (room.roomSettings.isClassicMode) {
-        room.currentDrawer = room.players[room.players.length - 1];
-        room.currentDrawerIndex = room.players.length - 1;
-      } else {
-        room.currentTeamDrawer = room.teams[0];
-        room.currentTeamDrawerIndex = 0;
-      }
-      room.currentRound = 1;
-      startTurn(roomCode);
-    });*/
-
-    socket.on("send-message", ({ room_id, notify }) => {
-      const { message, room, isClose } : { message: Message, room: Room | null, isClose: boolean } = ReceivedMessage(io, socket, room_id, notify);
-
-      if (!message || !room)
-        return;
-      io.to(room_id).emit("received-message", {
-        message: message as Message,
-        guessed: room.guessedPlayers as Player[]
-      });
-
-      if (isClose) {
-        SendCommandToUser(io, socket, room, "received-message", {
-          message: SystemMessage(`${message.content} is close!`, WarningColor) as Message,
-          guessed: room.guessedPlayers as Player[]
-        });
-      }
-    });
-
-    socket.on("get-word-list", ({ roomCode }) => {
-      /*const room = rooms[roomCode];
-      if (!room) {
-        return console.error("Room not found:", roomCode);
-      }
-
-      const selectedWords = selectWords(room);
-      io.to(roomCode).emit("send-word-list", { selectedWords });*/
-    });
-
     socket.on('player-guessed', ({ roomCode, playerId }) => {
       const room = rooms[roomCode];
       if (!room) return;
@@ -332,61 +294,6 @@ export function setupSocket(io: Server) {
         }
       }
     });
-
-    /*socket.on("word-chosen", ({ roomId, word }) => {
-      const room = rooms[roomId];
-      if (!room) {
-        console.error("Room not found:", roomId);
-        return;
-      }
-
-      let currentDrawer: Player = null;
-
-      if (room.roomSettings.isClassicMode) {
-        currentDrawer = room.players[room.currentDrawerIndex];
-      } else {
-        const currentTeamDrawer = room.teams[room.currentTeamDrawerIndex];
-        currentDrawer = currentTeamDrawer.players[0];
-      }
-
-      console.log("Word chosen received from:", socket.id, "Expected drawer:", currentDrawer.id);
-
-      if (socket.id !== currentDrawer.id) {
-        console.error("Unauthorized word selection attempt by:", socket.id);
-        return;
-      }
-      room.currentWord = word;
-      console.log("Word chosen:", word);
-
-      if (room.roomSettings.isClassicMode) {
-        io.to(roomId).emit("word-chosen", { currentWord: word, wordLength: word.length });
-      } else {
-        const players : Player[]= room.teams[room.currentTeamDrawerIndex].players;
-
-        io.to(roomId).emit("word-chosen-team", { currentWord: word, wordLength: word.length, DrawerPlayersTeam: players});
-      }
-      startDrawingTimer(roomId);
-    });*/
-
-    function startTurn(roomId: string) {
-      /*console.log("Starting turn for room:", roomId);
-      const room = rooms[roomId];
-      const wordOptions = selectWords(room);
-      
-      if (room.roomSettings.isClassicMode) {
-        const currentDrawer = room.players[room.currentDrawerIndex];
-        io.to(roomId).emit("turn-started", { drawer: currentDrawer, round: room.currentRound });
-        io.to(currentDrawer.id).emit("choose-word", { words: wordOptions });
-      } else {
-        const team = room.teams[room.currentTeamDrawerIndex];
-        const firstPlayer = team.players[0];
-
-        io.to(roomId).emit("turn-started-team", { currentTeamDrawer: room.currentTeamDrawer, round: room.currentRound, currentDrawer: firstPlayer });
-
-        // Get the first player of the current team drawer
-        io.to(firstPlayer.id).emit("choose-word", { words: wordOptions });
-      }*/
-    }
 
     function startDrawingTimer(roomId: string) {
       const room = rooms[roomId];
@@ -478,7 +385,7 @@ export function setupSocket(io: Server) {
         room.guessedTeams = [];
       }
 
-      startTurn(roomId);
+//      startTurn(roomId);
     }
 
     function endGame(roomId: string) {

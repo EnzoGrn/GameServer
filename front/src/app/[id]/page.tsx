@@ -276,8 +276,27 @@ export default function Page()
     };
   };
 
+  useEffect(() => {
+    if (!socket)
+      return;
+
+    const handleYouGuessed = () => {
+      setGameState("guess");
+    };
+
+    socket.on("you-guessed", handleYouGuessed);
+
+    return () => {
+      socket.off("you-guessed", handleYouGuessed);
+    };
+  }, [socket]);
 
 
+
+
+
+
+  
 
 
 
@@ -438,20 +457,6 @@ export default function Page()
       socket.off("word-chosen-team", HandleWordChosenTeam);
     };
   }, [socket, thisRoom]);
-
-  useEffect(() => {
-    if (!socket) return;
-
-    const handleYouGuessed = () => {
-      setGameState("guess");
-    };
-
-    socket.on("you-guessed", handleYouGuessed);
-
-    return () => {
-      socket.off("you-guessed", handleYouGuessed);
-    };
-  }, [socket]);
 
   useEffect(() => {
     if (!socket)

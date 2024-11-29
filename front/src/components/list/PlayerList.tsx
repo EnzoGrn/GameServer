@@ -23,6 +23,20 @@ const PlayerList = ({ room }: { room: Lobby.Room }) => {
     }
   }, [socket, room]);
 
+  useEffect(() => {
+    if (!socket)
+      return;
+    socket.on('update-users', (users: User.Player[]) => {
+      console.log("[update-users]: ", users);
+
+      setUsers(users);
+    });
+
+    return () => {
+      socket.off('update-room');
+    }
+  }, [socket, users]);
+
   return (
     <div className="flex-grow flex flex-col h-full p-4 order-2 min-w-80 max-w-80">
       <ul className="flex-grow overflow-visible">
