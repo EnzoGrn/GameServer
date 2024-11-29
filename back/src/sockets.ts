@@ -1,9 +1,8 @@
 // src/sockets.ts
 import { Server, Socket } from "socket.io";
 import { rooms } from "./rooms";
-import { Player, Room, ScoreBoard, Team } from "./types";
-import { addPlayerToRoom } from "./players";
-import { selectWords } from "./words";
+import { Player, Room, ScoreBoard } from "./types";
+import { SelectWords } from "./tools/words";
 import { changeTeamPlayMode, addPlayerToTeam, removePlayerFromTeam } from "./teams";
 import { ReceivedMessage, SystemMessage } from "./chat/chat";
 import { SendCommandToUser } from "./tools/command";
@@ -38,6 +37,7 @@ export function setupSocket(io: Server) {
 
       const { room, isNew } : { room: Lobby.Room, isNew: boolean } = Lobby.JoinRoom(profile, code);
 
+      console.log("[Response]: 'room-joined' | ", room);
       socket.emit("room-joined", room as Lobby.Room);
       socket.join(room.id);
 
@@ -45,12 +45,61 @@ export function setupSocket(io: Server) {
         socket.emit("message-received", SystemMessage("Need to wait for another player to start the game!", OrangeColor) as Message);
       } else {
         io.to(room.id).emit("message-received", SystemMessage(`${profile.name} joined the room!`, OrangeColor) as Message);
-        io.to(room.id).emit("update-users", room.users as User.Player[]);
+        io.to(room.id).emit("update-room", room as Lobby.Room);
+        io.to(room.id).emit("update-state", room.state as Lobby.State);
+      }
+    });
 
-        if (!room.isStarted && room.isDefault && room.users.length === 2) {
-          // TODO: Start the game
+    socket.on("disconnect", () => {
+      console.log("[disconnect | " + socket.id + "]");
+
+      let user: User.Player | undefined;
+
+      for (let room of Object.values(Lobby.AllRoom)) {
+        user = room.users.find((checker: User.Player) => checker.profile.id === socket.id);
+
+        // -- Remove the user from the room (delete the room if empty)
+        if (user) {
+          room.users = room.users.filter((player: User.Player) => player.profile.id !== socket.id);
+
+          io.to(room.id).emit("message-received", SystemMessage(`${user.profile.name} left the room!`, OrangeColor) as Message);
+          io.to(room.id).emit("update-users", room.users as User.Player[]);
+
+          if (room.users.length === 0)
+            delete Lobby.AllRoom[room.id];
+
+          // TODO: Remove player from the team
+
+          socket.emit("go-home");
+        }
+
+        // -- Change the host if the host left
+        if (!room.isDefault && user && user.isHost && Lobby.AllRoom[room.id]) {
+          var oldPlayer: User.Player = room.users[0];
+
+          oldPlayer.isHost = true;
+
+          io.to(room.id).emit("message-received", SystemMessage(`${oldPlayer.profile.name} is now the room owner!`, OrangeColor) as Message);
+          io.to(room.id).emit("update-users", room.users as User.Player[]);
+        }
+
+        // -- Check if there is enough player to continue the 
+        if (room.state.isStarted) {
+          if (room.settings.gameMode === Lobby.GameMode.Classic && room.users.length < 2) {
+            // TOOD: End the game
+          } else if (room.settings.gameMode === Lobby.GameMode.Team /* && TODO: Team Counter */) {
+            // TOOD: End the game
+          }
+
+          // TODO: Update the data of the game
         }
       }
+    });
+
+    socket.on("start-game", (room_id: string) => {
+      console.log("[start-game | " + socket.id + "]: ", room_id);
+
+      _StartGame(room_id);
     });
 
     socket.on("sent-message", (data: any) => {
@@ -61,133 +110,112 @@ export function setupSocket(io: Server) {
       io.to(room_id).emit("message-received", message as Message);
     });
 
-    /**
-     * @function
-     * @name socket.on("disconnect")
-     * @description
-     * Cette fonction écoute l'événement "disconnect" émis par le client. Lorsqu'il est reçu,
-     * elle gère la déconnexion de l'utilisateur en supprimant l'utilisateur de la room et en
-     * informant les autres clients de la déconnexion.
-     *
-     * @event
-     * @name disconnect
-     * @description
-     * L'événement "disconnect" est émis par le client lorsqu'il se déconnecte du serveur.
-     *
-     * @returns {void} Cette fonction ne renvoie rien.
-     */
-    socket.on("disconnect", () => {
-      console.log("User disconnected: ", socket.id);
-      let player: Player | undefined;
+    socket.on("word-chosen", (data: any) => {
+      const { room_id, word } : { room_id: string, word: string } = data;
 
-      for (let room of Object.values(rooms)) {
-        player = room.players.find((checker) => checker.id === socket.id);
+      console.log("[word-chosen | " + socket.id + "]: ", room_id, word);
 
-        if (player) {
-          room.players = room.players.filter((player) => player.id !== socket.id);
-          room.scoreBoard = room.scoreBoard.filter((player) => player.playerId !== socket.id);
+      const room: Lobby.Room | undefined = Lobby.AllRoom[room_id];
 
-          socket.emit("go-home");
+      if (!room)
+        return;
+      if (room.settings.gameMode === Lobby.GameMode.Classic && room.currentDrawer === undefined && socket.id !== (room.currentDrawer as User.Player).profile.id)
+        return;
+      else if (room.settings.gameMode === Lobby.GameMode.Team && (room.currentDrawer === undefined || (room.currentDrawer as User.Player[]).length) && !(room.currentDrawer as User.Player[])?.find((player: User.Player) => player.profile.id === socket.id))
+        return;
+      room.currentWord = word;
 
-          // Si la room est vide, la supprimer
-          if (room.players.length === 0) {
-            delete rooms[room.id];
-          }
+      io.to(room_id).emit("word-chosen", word as string);
 
-          io.to(room.id).emit("received-message", {
-            message: SystemMessage(`${player.userName} left the room!`, OrangeColor) as Message,
-            guessed: room.guessedPlayers as Player[]
-          });
+      room.state.canDraw        = true;
+      room.state.isChoosingWord = false;
 
-          // Si l'hôte se déconnecte, choisir un nouveau hôte aléatoire
-          if (player.host && room.players.length > 0) {
-            const randomPlayer = room.players[Math.floor(Math.random() * room.players.length)];
+      io.to(room_id).emit("update-state", room.state as Lobby.State);
 
-            room.players = room.players.map((checker) =>
-              checker.id === randomPlayer.id ? { ...checker, host: true } : checker
-            );
-
-            io.to(room.id).emit("received-message", {
-              message: SystemMessage(`${randomPlayer.userName} is now the room owner!`, OrangeColor) as Message,
-              guessed: room.guessedPlayers as Player[]
-            });
-          }
-
-          if (room.gameStarted && room.players.length < 2) {
-            endGame(room.id);
-          }
-
-          // Si la room n'est pas en mode classique, enlever le joueur de son équipe
-          if (!room.roomSettings.isClassicMode) {
-            removePlayerFromTeam(room, player);
-          }
-
-          io.to(room.id).emit("room-data-updated", { room });
-        }
-      }
+      // TODO: startDrawingTimer(roomId);
     });
 
-    /**
-     * @function
-     * @name socket.on("leave")
-     * @description
-     * Cette fonction écoute l'événement "leave" émis par le client. Lorsqu'il est reçu,
-     * elle gère la sortie de l'utilisateur de la room en supprimant l'utilisateur de la room
-     * et en informant les autres clients de la sortie de l'utilisateur.
-     *
-     * @event
-     * @name leave
-     * @description
-     * L'événement "leave" est émis par le client pour quitter la room actuelle.
-     *
-     * @returns {void} Cette fonction ne renvoie rien.
-     */
-    socket.on("leave", ({ roomCode, mySelf }) => {
-      socket.emit("go-home");
-      const message: any = {
-        text: `${mySelf.userName} left the room!`,
-        timestamp: Date.now(),
-      };
+    const _StartGame = (room_id: string) => {
+      const room: Lobby.Room | undefined = Lobby.AllRoom[room_id];
 
-      const room = rooms[roomCode];
+      if (!room)
+        return;
+      if (room.users.length < 2) {
+        io.to(room.id).emit("message-received", SystemMessage("Room must have at least two players to start the game!", ErrorColor) as Message);
 
-      room.players = room.players.filter((player) => player.id !== mySelf.id);
-      room.scoreBoard = room.scoreBoard.filter((score) => score.playerId !== mySelf.id);
-      //room.messages.push(message);
-
-      if (room.players.length === 0) {
-        delete rooms[roomCode];
+        return;
       }
 
-      io.to(roomCode).emit("received-message", {
-        message: SystemMessage(`${mySelf.userName} left the room!`, OrangeColor) as Message,
-        guessed: room.guessedPlayers as Player[]
+      room.users.forEach((player: User.Player) => {
+        // -- Reset the score of the player
+        player.hasGuessed = false;
+        player.score = 0;
       });
 
-      if (mySelf.host && room.players.length > 0) {
-        const randomPlayer = room.players[Math.floor(Math.random() * room.players.length)];
+      io.to(room.id).emit("update-users", room.users as User.Player[]);
 
-        room.players = room.players.map((checker) =>
-          checker.id === randomPlayer.id ? { ...checker, host: true } : checker
-        );
+      // TODO: Check if every team has at least one player (if team mode)
 
-        io.to(roomCode).emit("received-message", {
-          message: SystemMessage(`${randomPlayer.userName} is now the room owner!`, OrangeColor) as Message,
-          guessed: room.guessedPlayers as Player[]
+      room.state.isStarted = true;
+
+      io.to(room_id).emit("update-state", room.state as Lobby.State);
+
+      room.currentTurn = 1;
+
+      if (room.settings.gameMode === Lobby.GameMode.Classic) {
+        room.currentDrawer = room.users[room.users.length - 1];
+      } else {
+        // TODO: Add team logic
+      }
+
+      _StartTurn(room_id);
+    };
+
+    const _StartTurn = (room_id: string) => {
+      const room: Lobby.Room | undefined = Lobby.AllRoom[room_id];
+
+      if (!room)
+        return;
+      const words: { id: number, text: string }[] = SelectWords(room);
+
+      room.state.isChoosingWord = true;
+      room.state.canDraw        = false;
+
+      io.to(room_id).emit("update-state", room.state as Lobby.State);
+
+      if (room.settings.gameMode === Lobby.GameMode.Classic) {
+        const currentDrawer: User.Player = room.currentDrawer as User.Player;
+
+        io.to(room_id).emit("pre-starting-turn", {
+          drawer: currentDrawer as User.Player,
+          round: room.currentTurn as number,
+          words: words as { id: number, text: string }[]
         });
+      } else {
+        // TODO: Team logic
       }
 
-      if (room.gameStarted && room.players.length < 2) {
-        endGame(room.id);
-      }
+      io.to(room_id).emit("update-users", room.users as User.Player[]);
+    };
 
-      if (!room.roomSettings.isClassicMode) {
-        const player: Player = room.players.find((player) => player.id === mySelf.id);
-        removePlayerFromTeam(room, player);
-      }
 
-      io.to(roomCode).emit("room-data-updated", { room: rooms[roomCode] });
-    });
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
     socket.on("set-custom-words-only", ({ roomCode, boolean }) => {
       rooms[roomCode].roomSettings.useCustomWords = boolean;
@@ -237,7 +265,7 @@ export function setupSocket(io: Server) {
       socket.broadcast.emit('clear-canvas');
     });
 
-    socket.on("start-game", ({ roomCode }) => {
+    /*socket.on("start-game", ({ roomCode }) => {
       const room = rooms[roomCode];
       if (!room || room.players.length < 2) {
         io.to(roomCode).emit("received-message", {
@@ -257,7 +285,7 @@ export function setupSocket(io: Server) {
       }
       room.currentRound = 1;
       startTurn(roomCode);
-    });
+    });*/
 
     socket.on("send-message", ({ room_id, notify }) => {
       const { message, room, isClose } : { message: Message, room: Room | null, isClose: boolean } = ReceivedMessage(io, socket, room_id, notify);
@@ -278,13 +306,13 @@ export function setupSocket(io: Server) {
     });
 
     socket.on("get-word-list", ({ roomCode }) => {
-      const room = rooms[roomCode];
+      /*const room = rooms[roomCode];
       if (!room) {
         return console.error("Room not found:", roomCode);
       }
 
       const selectedWords = selectWords(room);
-      io.to(roomCode).emit("send-word-list", { selectedWords });
+      io.to(roomCode).emit("send-word-list", { selectedWords });*/
     });
 
     socket.on('player-guessed', ({ roomCode, playerId }) => {
@@ -306,7 +334,7 @@ export function setupSocket(io: Server) {
       }
     });
 
-    socket.on("word-chosen", ({ roomId, word }) => {
+    /*socket.on("word-chosen", ({ roomId, word }) => {
       const room = rooms[roomId];
       if (!room) {
         console.error("Room not found:", roomId);
@@ -339,10 +367,10 @@ export function setupSocket(io: Server) {
         io.to(roomId).emit("word-chosen-team", { currentWord: word, wordLength: word.length, DrawerPlayersTeam: players});
       }
       startDrawingTimer(roomId);
-    });
+    });*/
 
     function startTurn(roomId: string) {
-      console.log("Starting turn for room:", roomId);
+      /*console.log("Starting turn for room:", roomId);
       const room = rooms[roomId];
       const wordOptions = selectWords(room);
       
@@ -358,7 +386,7 @@ export function setupSocket(io: Server) {
 
         // Get the first player of the current team drawer
         io.to(firstPlayer.id).emit("choose-word", { words: wordOptions });
-      }
+      }*/
     }
 
     function startDrawingTimer(roomId: string) {

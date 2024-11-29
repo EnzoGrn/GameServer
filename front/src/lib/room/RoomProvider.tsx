@@ -21,15 +21,29 @@ export const RoomProvider = ({ children }: any) => {
     if (!socket)
       return;
     socket.on('update-users', (players: User.Player[]) => {
-        console.log("[update-users]: ", players);
+      console.log("[update-users]: ", players);
 
-        setRoom({ ...room, users: players });
+      setRoom({ ...room, users: players });
     });
 
     return () => {
       socket.off('update-users');
     }
-  }, [socket]);
+  }, [socket, room]);
+
+  useEffect(() => {
+    if (!socket)
+      return;
+    socket.on('update-room', (room: Lobby.Room) => {
+      console.log("[update-room]: ", room);
+
+      setRoom(room);
+    });
+
+    return () => {
+      socket.off('update-room');
+    }
+  }, [socket, room]);
 
   return (
     <RoomContext.Provider value={{ room, setRoom }}>

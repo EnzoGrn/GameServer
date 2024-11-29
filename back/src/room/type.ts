@@ -11,15 +11,35 @@ export namespace Lobby { // Drawing Together
     }
 
     export interface Settings {
-        language : string;
-        maxPlayer: number;
-        gameMode : GameMode;
+        language          : string;
+        maxPlayer         : number;
+        gameMode          : GameMode;
+        maxTurn           : number;
+        useCustomWordsOnly: boolean;
+        customWords       : string[];
     };
 
     export const defaultSettings: Settings = Object.freeze({
-        language : "English",
-        maxPlayer: 8,
-        gameMode : GameMode.Classic
+        language          : "English",
+        maxPlayer         : 8,
+        gameMode          : GameMode.Classic,
+        maxTurn           : 3,
+        useCustomWordsOnly: false,
+        customWords       : []
+    });
+
+    export interface State {
+        isStarted     : boolean;
+        canDraw       : boolean;
+        isChoosingWord: boolean;
+        showScore     : boolean;
+    };
+
+    export const defaultState: State = Object.freeze({
+        isStarted     : false,
+        canDraw       : false,
+        isChoosingWord: false,
+        showScore     : false
     });
 
     export interface Room {
@@ -27,16 +47,20 @@ export namespace Lobby { // Drawing Together
         users         : User.Player[];
         settings      : Settings;
         isDefault     : boolean;
-        isStarted     : boolean;
         currentDrawer : User.Player | User.Player[] | undefined; // Depending on the game mode
+        currentTurn   : number;
+        currentWord   : string | undefined;
+        state         : State;
     };
 
     export const defaultRoom: Room = Object.freeze({
-        users    : [] as User.Player[],
-        settings : defaultSettings,
-        isDefault: true,
-        isStarted: false,
-        currentDrawer: undefined
+        users        : [] as User.Player[],
+        settings     : defaultSettings,
+        isDefault    : true,
+        currentDrawer: undefined,
+        currentTurn  : 0,
+        currentWord  : undefined,
+        state        : defaultState
     });
 
     export const GetRoomLanguage = (language: string): Lobby.Room[] => {

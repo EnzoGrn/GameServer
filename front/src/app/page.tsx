@@ -170,6 +170,7 @@ export default function Home()
               className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#f37b78] focus:outline-none"
             >
               <option value="English">English</option>
+              <option value="French">French</option>
               {/* -- Add more option */}
             </select>
           </LabelBlock>
