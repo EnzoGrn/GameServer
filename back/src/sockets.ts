@@ -37,7 +37,6 @@ export function setupSocket(io: Server) {
 
       const { room, isNew } : { room: Lobby.Room, isNew: boolean } = Lobby.JoinRoom(profile, code);
 
-      console.log("[Response]: 'room-joined' | ", room);
       socket.emit("room-joined", room as Lobby.Room);
       socket.join(room.id);
 
@@ -136,7 +135,7 @@ export function setupSocket(io: Server) {
     });
 
     const _StartGame = (room_id: string) => {
-      const room: Lobby.Room | undefined = Lobby.AllRoom[room_id];
+      var room: Lobby.Room | undefined = Lobby.AllRoom[room_id];
 
       if (!room)
         return;
@@ -198,6 +197,24 @@ export function setupSocket(io: Server) {
       io.to(room_id).emit("update-users", room.users as User.Player[]);
     };
 
+    socket.on('mouse', (data) => {
+      const room = rooms[data.roomCode];
+
+      if (!room) return;
+
+      if (room.roomSettings.isClassicMode && room.currentDrawer.id !== socket.id) {
+          return;
+      } else if (!room.roomSettings.isClassicMode && !room?.currentTeamDrawer?.players.find((player) => player.id === socket.id)) {
+        return;
+      }
+
+      socket.broadcast.emit('mouse', data);
+    });
+
+    socket.on('clear-canvas', () => {
+      socket.broadcast.emit('clear-canvas');
+    });
+
 
 
 
@@ -245,24 +262,6 @@ export function setupSocket(io: Server) {
     socket.on("set-word-count", ({ setting, roomCode }) => {
       rooms[roomCode].roomSettings.wordCount = setting;
       io.to(roomCode).emit("room-data-updated", { room: rooms[roomCode] });
-    });
-
-    socket.on('mouse', (data) => {
-      const room = rooms[data.roomCode];
-
-      if (!room) return;
-
-      if (room.roomSettings.isClassicMode && room.currentDrawer.id !== socket.id) {
-          return;
-      } else if (!room.roomSettings.isClassicMode && !room?.currentTeamDrawer?.players.find((player) => player.id === socket.id)) {
-        return;
-      }
-
-      socket.broadcast.emit('mouse', data);
-    });
-
-    socket.on('clear-canvas', () => {
-      socket.broadcast.emit('clear-canvas');
     });
 
     /*socket.on("start-game", ({ roomCode }) => {

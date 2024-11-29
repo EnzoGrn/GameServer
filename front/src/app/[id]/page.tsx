@@ -83,6 +83,7 @@ export default function Page()
       console.log("[pre-starting-turn]: ", drawer, round, words);
 
       setRoom({ ...room, currentDrawer: drawer, currentTurn: round });
+      setCurrentDrawer(drawer);
 
       if (room.settings.gameMode === Lobby.GameMode.Classic) {
         if ((drawer as User.Player).profile.id === socket.id) {
@@ -171,51 +172,52 @@ export default function Page()
     }
   }, [socket, room]);
 
-
-
-
-
-
-
-
-  const roomRef    = useRef<Room | null>(null);
-  const [thisRoom, setRooom] = useState<Room | null>(null);
+  const [currentDrawer, setCurrentDrawer] = useState<User.Player | User.Player[] | undefined>(undefined);
 
   // -- Canvas -- //
 
   const canvasParentRef = useRef<HTMLDivElement | null>(null);
   const hiddenCanvasRef = useRef<HTMLDivElement | null>(null); // Hidden canvas for resizing the main canvas
   const [p5Instance, setP5Instance] = useState<p5 | null>(null);
+  const [canvas, setCanvas] = useState<p5.Renderer | null>(null);
+  const canDrawRef = useRef<boolean>(canDraw);
+  const isChoosingWordRef = useRef<boolean>(isChoosingWord);
+  const drawersRef = useRef<User.Player | User.Player[] | undefined>(currentDrawer);
+
+  useEffect(() => {
+    isChoosingWordRef.current = isChoosingWord;
+  }, [isChoosingWord]);
+
+  useEffect(() => {
+    drawersRef.current = currentDrawer;
+  }, [currentDrawer]);
+
+  useEffect(() => {
+    canDrawRef.current = canDraw;
+  }, [canDraw]);
 
   useSafeEffect(() => {
-    if (socket && !p5Instance) {
-      socket.emit('get-room', params.id);
-    }
-
     if (canvasParentRef.current && socket && !p5Instance) {
-      console.log('Creating P5 instance...');
-
       setP5Instance(new p5((p: p5) => sketch(p, socket), canvasParentRef.current));
     }
 
     return () => {
       p5Instance?.remove();
     };
-  }, [thisRoom, socket]);
+  }, [room, socket, currentDrawer]);
 
-  useEffect(() => {
-    roomRef.current = thisRoom;
-  }, [thisRoom]);
 
   const sketch = (p: p5, socket: Socket) => {
     p.setup = () => {
       if (canvasParentRef.current) {
         const { width, height } = canvasParentRef.current.getBoundingClientRect();
-        const canvas            = p.createCanvas(width, height);
+        const canvas: p5.Renderer = p.createCanvas(width, height);
 
         p.background(255);
 
         canvas.parent(canvasParentRef.current);
+
+        setCanvas(canvas);
 
         socket.on('mouse', (data: MouseData) => {
           if (socket?.id === data?.senderId)
@@ -229,18 +231,18 @@ export default function Page()
     };
 
     p.mouseDragged = () => {
-      const room: Room | null     = roomRef.current;
       const draw: boolean         = canDrawRef.current;
       const choosingWord: boolean = isChoosingWordRef.current;
 
       if (!draw || choosingWord || !room || !socket)
         return;
+      const drawers = drawersRef.current;
 
-      if (room?.roomSettings.isClassicMode) {
-        if (room?.currentDrawer?.id !== socket.id)
+      if (room.settings.gameMode === Lobby.GameMode.Classic) {
+        if ((drawers as User.Player | undefined)?.profile.id !== socket.id)
           return;
       } else {
-        if (!room?.currentTeamDrawer?.players.find((player) => player.id === socket.id))
+        if (!(drawers as User.Player[])?.find((player: User.Player) => player.profile.id === socket.id))
           return;
       }
       
@@ -259,7 +261,7 @@ export default function Page()
         color: currentTool === 'eraser' ? '#FFFFFF' : '#000000',
         strokeWidth: currentTool === 'eraser' ? strokeWidth * 2 : strokeWidth,
         senderId: socket.id || '',
-        roomCode: room?.id || '',
+        roomCode: room.id || '',
       };
 
       socket.emit('mouse', data);
@@ -270,9 +272,22 @@ export default function Page()
     };
 
     p.draw = () => {
-      // Pas d'animation en continu nécessaire
+      console.log(canvas?.elt.toDataURL());
     };
   };
+
+
+
+
+
+
+
+  const roomRef    = useRef<Room | null>(null);
+  const [thisRoom, setRooom] = useState<Room | null>(null);
+
+  useEffect(() => {
+    roomRef.current = thisRoom;
+  }, [thisRoom]);
 
   /*
    * @brief Resize the canvas when the window is resized
@@ -324,24 +339,10 @@ export default function Page()
     }
   };
 
-  // -- Word List -- //
-
-  const isChoosingWordRef = useRef<boolean>(isChoosingWord);
-
-  useEffect(() => {
-    isChoosingWordRef.current = isChoosingWord;
-  }, [isChoosingWord]);
-
   // -- Game State -- //
   const [timeLeft   , setTimeLeft]    = useState<number>(0);
   const [showScore  , setShowScore]   = useState<boolean>(false);
   const [winner     , setWinner]      = useState<{ id: string; score: number } | null>(null);
-
-  const canDrawRef = useRef<boolean>(canDraw);
-
-  useEffect(() => {
-    canDrawRef.current = canDraw;
-  }, [canDraw]);
 
   /*
    * @brief Function call every time a turn is started
