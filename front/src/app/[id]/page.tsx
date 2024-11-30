@@ -25,6 +25,7 @@ import { useRoom } from '@/lib/room/RoomProvider';
 import { User } from '@/lib/player/type';
 import { Lobby } from '@/lib/room/type';
 import { GetPlayerWithId, IsDrawing } from '@/lib/room/function';
+import DrawingTools, { ToolsType } from '@/components/Canvas/Tools';
 
 export default function Page()
 {
@@ -207,6 +208,22 @@ export default function Page()
     canDrawRef.current = canDraw;
   }, [canDraw]);
 
+  const [tool       , setTool] = useState<ToolsType>('pencil');
+  const [strokeWidth, setStrokeWidth] = useState<number>(5);
+  const [color      , setColor] = useState<string>('#000000');
+
+  const colorRef = useRef(color);
+
+  useEffect(() => {
+    colorRef.current = color;
+  }, [color]);
+
+  const strokeWidthRef = useRef(strokeWidth);
+
+  useEffect(() => {
+    strokeWidthRef.current = strokeWidth;
+  }, [strokeWidth]);
+
   useSafeEffect(() => {
     if (canvasParentRef.current && socket && !p5Instance) {
       setP5Instance(new p5((p: p5) => sketch(p, socket), canvasParentRef.current));
@@ -215,7 +232,7 @@ export default function Page()
     return () => {
       p5Instance?.remove();
     };
-  }, [room, socket, currentDrawer]);
+  }, [room, socket, currentDrawer, color, strokeWidth, tool]);
 
 
   const sketch = (p: p5, socket: Socket) => {
@@ -258,6 +275,8 @@ export default function Page()
       }
       
       const currentTool = toolRef.current;
+      const currentColor = colorRef.current;
+      const currentStrokeWidth  = strokeWidthRef.current;
       const x  = p.mouseX;
       const y  = p.mouseY;
       const px = p.pmouseX;
@@ -269,8 +288,8 @@ export default function Page()
         y,
         px,
         py,
-        color: currentTool === 'eraser' ? '#FFFFFF' : '#000000',
-        strokeWidth: currentTool === 'eraser' ? strokeWidth * 2 : strokeWidth,
+        color      : currentTool === 'eraser' ? '#FFFFFF' : currentColor,
+        strokeWidth: currentTool === 'eraser' ? currentStrokeWidth * 2 : currentStrokeWidth,
         senderId: socket.id || '',
         roomCode: room.id || '',
       };
@@ -423,15 +442,18 @@ export default function Page()
   }, [socket, winners]);
 
   // -- Tools -- //
-  const [tool       , setTool] = useState<'pencil' | 'eraser'>('pencil'); // Outil actif
-  const [strokeWidth, setStrokeWidth] = useState(4);                      // Épaisseur du trait
-  const [color      , setColor] = useState('#000000');                    // Couleur du crayon
-
   const toolRef = useRef(tool);
 
   useEffect(() => {
     toolRef.current = tool;
   }, [tool]);
+
+  const handleToolChange = ({ tool, color, size } : { tool: ToolsType, color: string, size: number }) => {
+    console.log("[handleToolChange]: ", tool, color, size);
+    setTool(tool);
+    setColor(color);
+    setStrokeWidth(size);
+  };
 
   return (
     <div className="min-h-screen w-full grid grid-cols-[auto_2fr_1fr] grid-rows-[auto_1fr_auto] gap-2">
@@ -451,104 +473,102 @@ export default function Page()
 
         {/* Canvas */}
         <div className="relative w-full">
-          <div ref={canvasParentRef} className="absolute w-full h-64 md:h-96 bg-white border border-gray-300 rounded-md mb-4">
-            {/* The canvas will dynamically being load here.. */}
+          <div
+            ref={canvasParentRef}
+            className="absolute w-full h-64 md:h-96 bg-white border border-gray-300 rounded-md shadow-sm"
+          >
+            {/* The canvas will dynamically load here */}
           </div>
 
-          {/* If the game is not start */}
-          {!isStarted && !showScore &&
-            <div className="absolute w-full h-64 md:h-96 bg-gray-800 bg-opacity-50 border border-gray-900 rounded-md mb-4 flex justify-center items-center z-100">
-              {!room.isDefault &&
-                <>{/* Settings of the game */}</>
-              }
-              {(me?.isHost === true || room.isDefault) && (
-                <div className="w-full flex justify-center m-4">
-                  <button onClick={() => handleStartGame()} className="bg-green-500 hover:bg-green-600 text-white px-6 py-2 rounded-md text-lg font-extrabold">
-                    Start!
-                  </button>
+          {/* Overlay if game has not started */}
+          {!isStarted && !showScore && (
+            <div className="absolute w-full h-64 md:h-96 bg-gray-800 bg-opacity-70 rounded-md flex flex-col justify-center items-center z-10">
+              {!room.isDefault && (
+                <div className="text-white font-bold text-xl text-center mb-4">
+                  Waiting for the host to start the game...
+                </div>
+              )}
+              {(me?.isHost || room.isDefault) && (
+                <button
+                  onClick={handleStartGame}
+                  className="bg-green-500 hover:bg-green-600 text-white px-6 py-2 rounded-md text-lg font-extrabold transition"
+                >
+                  Start!
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* Choosing word */}
+          {isStarted && !canDraw && (
+            <div className="absolute w-full h-64 md:h-96 bg-gray-800 bg-opacity-70 rounded-md flex flex-col justify-center items-center z-10">
+              {isChoosingWord && wordList?.length > 0 ? (
+                <div className="flex flex-col items-center">
+                  <div className="text-white font-bold text-lg mb-4">
+                    Choose a word
+                  </div>
+                  <div className="flex flex-wrap justify-center gap-4">
+                    {wordList.map((word, index) => (
+                      <button
+                        key={index}
+                        onClick={() => ChooseWord(word?.text)}
+                        className="bg-white hover:bg-gray-100 text-gray-800 px-6 py-2 rounded-md shadow-md text-lg font-semibold transition"
+                      >
+                        {word?.text}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : wordReveal === false ? (
+                <div className="text-white text-center font-lg">
+                  {room.settings.gameMode === Lobby.GameMode.Classic
+                    ? `${(currentDrawer as User.Player)?.profile.name} is choosing the word!`
+                    : `${(currentDrawer as User.Player[])[0]?.profile.name} is choosing the word!`}
+                </div>
+              ) : (
+                <div className="text-white text-center font-lg">
+                  The word was:{" "}
+                  <span className="font-bold text-yellow-400">{word}</span>
                 </div>
               )}
             </div>
-          }
+          )}
 
-          {/* Choosing word */}
-          {isStarted && !canDraw &&
-            <div className="absolute w-full h-64 md:h-96 bg-gray-800 bg-opacity-50 border border-gray-900 rounded-md mb-4 flex justify-center items-center z-100">
-              {isChoosingWord && wordList?.length > 0 ?
-                (
-                  <div className="flex-col justify-center items-center">
-                    <div className='text-white font-bold text-lg text-center'>
-                      Choose a word
-                    </div>
-                    <div className="w-full flex justify-center m-4">
-                      {wordList?.length > 0 && wordList?.map((word, index) => (
-                        <button
-                          key={index} onClick={() => ChooseWord(word?.text)}
-                          className="bg-white hover:bg-slate-100 text-gray-800 px-6 py-2 rounded-md text-lg mr-4"
-                        >
-                          {word?.text}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                ) : (
-                  wordReveal === false ?
-                  (
-                    <div className='text-white font-lg'>
-                      {room.settings.gameMode === Lobby.GameMode.Classic ? `${(currentDrawer as User.Player | undefined)?.profile.name} is choosing the word!` : `${(currentDrawer as User.Player[])[0]?.profile.name} is choosing the word!`}
-                    </div>
-                  ) : (
-                    <div className='text-white font-lg'>
-                      The word was: {word}
-                    </div>
-                  )
-                )
-              }
+          {/* Game ended / Show scores */}
+          {showScore && (
+            <div className="absolute w-full h-64 md:h-96 bg-gray-800 bg-opacity-70 rounded-md flex flex-col justify-center items-center z-10">
+              <div className="w-32 h-32 bg-center bg-cover mb-4" style={{ backgroundImage: "url('score.gif')" }} />
+              {winners?.map((winner, index) => (
+                <div
+                  key={index}
+                  className="bg-white bg-opacity-90 text-black text-lg font-bold px-4 py-2 rounded-md shadow-md mb-2"
+                >
+                  {winner?.profile.name} #{index + 1} - Score {winner?.score}
+                </div>
+              ))}
+              {(me?.isHost || room.isDefault) && (
+                <button
+                  onClick={handleStartGame}
+                  className="bg-green-500 hover:bg-green-600 text-white px-6 py-2 rounded-md text-lg font-extrabold mt-4 transition"
+                >
+                  Play Again!
+                </button>
+              )}
             </div>
-          }
+          )}
 
-          {/* If the game is started, and you can't draw */}
-          {!isStarted && !canDraw && showScore &&
-            <div className="absolute w-full h-64 md:h-96 bg-gray-800 bg-opacity-50 border border-gray-900 rounded-md mb-4 flex justify-center items-center z-100">
-              <div className="flex-col justify-center items-center">
-                <div className="relative w-[124px] h-[124px] flex items-center justify-center bg-center bg-cover" style={{ backgroundImage: "url('score.gif')" }} />
-                {winners?.map((winner, index) => (
-                    <div key={index} className="w-full h-full flex items-center justify-center">
-                      <div className="bg-opacity-50 p-4 rounded-md">
-                        <div className="text-black font-bold text-lg text-center">
-                          {winner?.profile.name} #{index + 1} - Score {winner?.score}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                  {(me?.isHost === true || room.isDefault) && (
-                  <div className="w-full flex justify-center m-4">
-                    <button onClick={() => handleStartGame()} className="bg-green-500 hover:bg-green-600 text-white px-6 py-2 rounded-md text-lg font-extrabold">
-                      Start!
-                    </button>
-                  </div>
-                )}
-              </div>
-            </div>
-          }
-
-          <div ref={hiddenCanvasRef} className="relative top-0 left-0 w-full h-64 md:h-96 bg-transparent z-[-1]" />
+          {/* Invisible canvas for interaction */}
+          <div
+            ref={hiddenCanvasRef}
+            className="relative top-0 left-0 w-full h-64 md:h-96 bg-transparent z-[-1]"
+          />
         </div>
+
 
         {/* Tools (brush) */}
 
         {isStarted && canDraw && IsDrawing(room.settings.gameMode, GetPlayerWithId(room, socket?.id!)!, currentDrawer) && (
-          <div className="flex items-center space-x-2 md:space-x-4">
-            <button onClick={() => setTool('pencil')}>Pencil</button>
-            <button onClick={() => setTool('eraser')}>Eraser</button>
-
-            <button
-              onClick={clearCanvas}
-              className="bg-red-400 px-3 md:px-4 py-1 md:py-2 rounded-md text-white"
-            >
-              Clear
-            </button>
-          </div>
+          <DrawingTools onToolChange={handleToolChange} />
         )}
       </div>
 
