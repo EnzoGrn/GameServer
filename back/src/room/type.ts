@@ -17,6 +17,7 @@ export namespace Lobby { // Drawing Together
         maxTurn           : number;
         useCustomWordsOnly: boolean;
         customWords       : string[];
+        drawTime          : number;
     };
 
     export const defaultSettings: Settings = Object.freeze({
@@ -25,7 +26,8 @@ export namespace Lobby { // Drawing Together
         gameMode          : GameMode.Classic,
         maxTurn           : 3,
         useCustomWordsOnly: false,
-        customWords       : []
+        customWords       : [],
+        drawTime          : 80
     });
 
     export interface State {

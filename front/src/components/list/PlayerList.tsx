@@ -3,9 +3,12 @@ import { IsDrawing } from "@/lib/room/function";
 import { useSocket } from "../provider/SocketProvider";
 import { Lobby } from "@/lib/room/type";
 import { useEffect, useState } from "react";
+import { useRoom } from "@/lib/room/RoomProvider";
+import { Room } from "@/lib/type/types";
 
 const PlayerList = ({ room }: { room: Lobby.Room }) => {
   const { socket } = useSocket();
+  const { setRoom } = useRoom();
 
   const [users, setUsers] = useState<User.Player[]>(room.users);
 
@@ -30,12 +33,13 @@ const PlayerList = ({ room }: { room: Lobby.Room }) => {
       console.log("[update-users]: ", users);
 
       setUsers(users);
+      setRoom({ ...room, users: users });
     });
 
     return () => {
       socket.off('update-room');
     }
-  }, [socket, users]);
+  }, [socket, users, room]);
 
   return (
     <div className="flex-grow flex flex-col h-full p-4 order-2 min-w-80 max-w-80">

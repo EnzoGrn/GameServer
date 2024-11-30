@@ -119,6 +119,8 @@ export function setupSocket(io: Server) {
       }
 
       io.to(room_id).emit("update-users", res.room.users as User.Player[]);
+
+      // TODO: Check if all players or teams have guessed the word -> go to next turn
     });
 
     socket.on("word-chosen", (data: any) => {
@@ -143,7 +145,7 @@ export function setupSocket(io: Server) {
 
       io.to(room_id).emit("update-state", room.state as Lobby.State);
 
-      // TODO: startDrawingTimer(roomId);
+      _StartDrawingTimer(room_id);
     });
 
     const _StartGame = (room_id: string) => {
@@ -167,6 +169,7 @@ export function setupSocket(io: Server) {
 
       // TODO: Check if every team has at least one player (if team mode)
 
+      room.state.showScore = false;
       room.state.isStarted = true;
 
       io.to(room_id).emit("update-state", room.state as Lobby.State);
@@ -189,6 +192,12 @@ export function setupSocket(io: Server) {
         return;
       const words: { id: number, text: string }[] = SelectWords(room);
 
+      room.users.forEach((player: User.Player) => {
+        player.hasGuessed = false;
+      });
+
+      io.to(room_id).emit("update-users", room.users as User.Player[]);
+
       room.state.isChoosingWord = true;
       room.state.canDraw        = false;
 
@@ -210,13 +219,13 @@ export function setupSocket(io: Server) {
     };
 
     socket.on('mouse', (data) => {
-      const room = rooms[data.roomCode];
+      const room: Lobby.Room | undefined = Lobby.AllRoom[data.roomCode];
 
-      if (!room) return;
-
-      if (room.roomSettings.isClassicMode && room.currentDrawer.id !== socket.id) {
+      if (!room)
+        return;
+      if (room.settings.gameMode === Lobby.GameMode.Classic && (room.currentDrawer as User.Player | undefined)?.profile.id !== socket.id) {
           return;
-      } else if (!room.roomSettings.isClassicMode && !room?.currentTeamDrawer?.players.find((player) => player.id === socket.id)) {
+      } else if (room.settings.gameMode === Lobby.GameMode.Team && !(room.currentDrawer as User.Player[])?.find((player: User.Player) => player.profile.id === socket.id)) {
         return;
       }
 
@@ -227,7 +236,135 @@ export function setupSocket(io: Server) {
       socket.broadcast.emit('clear-canvas');
     });
 
+    const _StartDrawingTimer = (room_id: string) => {
+      const room: Lobby.Room | undefined = Lobby.AllRoom[room_id];
 
+      if (!room)
+        return;
+      let timeLeft = room.settings.drawTime;
+
+      const timer = setInterval(() => {
+        timeLeft -= 1;
+
+        io.to(room_id).emit("timer-update", timeLeft as number);
+
+        if (room.settings.gameMode === Lobby.GameMode.Classic) {
+          var guessed: number = room.users.filter((player: User.Player) => player.hasGuessed).length;
+
+          if (timeLeft <= 0 || guessed === room.users.length - 1) {
+            clearInterval(timer); // To stop the timer
+            _EndTurn(room_id);
+          }
+        } else {
+          // TODO: Team logic
+          /*if (timeLeft <= 0 || room.guessedTeams.length === room.teams.length - 1) {
+            clearInterval(timer);
+            endTurn(room_id);
+          }*/
+        }
+
+        // If the time is over, we stop the timer and go to the next turn
+        if (timeLeft <= 0) {
+          clearInterval(timer);
+          _EndTurn(room_id);
+        }
+      }, 1000);
+    };
+
+    const _EndTurn = (room_id: string) => {
+      const room: Lobby.Room | undefined = Lobby.AllRoom[room_id];
+
+      if (!room)
+        return;
+      io.to(room_id).emit("timer-update", room.settings.drawTime as number);
+
+      room.users.forEach((player: User.Player) => {
+        if (player.hasGuessed) {
+          player.score += 100;
+        }
+      });
+
+      io.to(room_id).emit("turn-ended", room.currentWord as string);
+
+      room.state.canDraw = false;
+        
+      io.to(room_id).emit("update-state", room.state as Lobby.State);
+
+      if (room.settings.gameMode === Lobby.GameMode.Classic) {
+        const drawer = room.currentDrawer as User.Player;
+
+        drawer.score += 25 * room.users.filter((player: User.Player) => player.hasGuessed).length;
+
+        io.to(room_id).emit("update-users", room.users as User.Player[]);
+
+        // Get index of current drawer
+        var index: number = room.users.findIndex((player: User.Player) => player.profile.id === (room.currentDrawer as User.Player | undefined)?.profile.id);
+
+        index = (index + 1) % room.users.length;
+
+        room.currentDrawer = room.users[index];
+
+        if (index === room.users.length - 1) {
+          room.currentTurn += 1;
+
+          if (room.currentTurn > room.settings.maxTurn) {
+            _EndGame(room_id);
+
+            return;
+          }
+        }
+
+        io.to(room_id).emit("update-round", room.currentTurn as number);
+      } else {
+        (room.currentDrawer as User.Player[]).forEach((drawer: User.Player) => {
+          drawer.score += 25 * room.users.filter((player: User.Player) => player.hasGuessed).length;
+        });
+
+        io.to(room_id).emit("update-users", room.users as User.Player[]);
+        // Team logic
+        /*room.currentTeamDrawerIndex = (room.currentTeamDrawerIndex + 1) % room.teams.length;
+        room.currentTeamDrawer = room.teams[room.currentTeamDrawerIndex];
+
+        if (room.currentTeamDrawerIndex === room.teams.length - 1) {
+          room.currentRound += 1;
+          if (room.currentRound > room.roomSettings.rounds) {
+            endGame(roomId);
+            return;
+          }
+        }*/
+      }
+
+      setTimeout(() => {
+        _StartTurn(room_id);
+      }, 3000);
+    }
+
+    const _EndGame = (room_id: string) => {
+      const room: Lobby.Room | undefined = Lobby.AllRoom[room_id];
+
+      if (!room)
+        return;
+      if (room.settings.gameMode === Lobby.GameMode.Classic) {
+        // Winners represent the 3 players with the highest score
+        const winners: User.Player[] = room.users.sort((a: User.Player, b: User.Player) => b.score - a.score).slice(0, 3);
+
+        io.to(room_id).emit("game-ended", winners as User.Player[]);
+      } else {
+        // TODO: Team winner
+        // Winners represent the best team
+        /*
+        const teamWinner = Object.entries(room.teamScoreBoard).reduce((prev, current) => (prev[1].score > current[1].score ? prev : current));
+        io.to(room_id).emit("game-ended", { teamWinner, scores: Array.from(room.teamScoreBoard) });
+        */
+      }
+
+      room.state.isStarted      = false;
+      room.state.canDraw        = false;
+      room.state.isChoosingWord = false;
+      room.state.showScore      = true;
+
+      io.to(room_id).emit("update-state", room.state as Lobby.State);
+    }
 
 
 
@@ -275,132 +412,6 @@ export function setupSocket(io: Server) {
       rooms[roomCode].roomSettings.wordCount = setting;
       io.to(roomCode).emit("room-data-updated", { room: rooms[roomCode] });
     });
-
-    socket.on('player-guessed', ({ roomCode, playerId }) => {
-      const room = rooms[roomCode];
-      if (!room) return;
-
-      if (room.roomSettings.isClassicMode) {
-        if (!room.guessedPlayers.includes(playerId)) {
-          room.guessedPlayers.push(playerId);
-        }
-      } else {
-        const player = room.players.find((player) => player.id === playerId);
-        const team = room.teams.find((team) => team.id === player?.teamId);
-
-        if (!team?.hasGuessed) {
-          team.hasGuessed = true;
-          room.guessedTeams.push(team);
-        }
-      }
-    });
-
-    function startDrawingTimer(roomId: string) {
-      const room = rooms[roomId];
-      let timeLeft = room.roomSettings.drawTime;
-
-      const timer = setInterval(() => {
-        timeLeft -= 1;
-        io.to(roomId).emit("timer-update", { timeLeft });
-
-        if (room.roomSettings.isClassicMode) {
-          if (timeLeft <= 0 || room.guessedPlayers.length === room.players.length - 1) {
-            clearInterval(timer);
-            endTurn(roomId);
-          }
-        } else {
-          if (timeLeft <= 0 || room.guessedTeams.length === room.teams.length - 1) {
-            clearInterval(timer);
-            endTurn(roomId);
-          }
-        }
-      }, 1000);
-    }
-
-    function endTurn(roomId: string) {
-      const room = rooms[roomId];
-      console.log("Guessed players:", room.guessedPlayers);
-
-      if (room.roomSettings.isClassicMode) {
-        room.guessedPlayers?.forEach((player) => {
-          room.scoreBoard.find((score: ScoreBoard) => score.playerId === player.id).score += 100;
-        });
-
-        room.guessedPlayers = [];
-
-        io.to(roomId).emit("turn-ended", {
-          scores: room.scoreBoard,
-          word: room.currentWord,
-          guessedPlayers: room.guessedPlayers,
-        });
-
-        room.currentDrawerIndex = (room.currentDrawerIndex + 1) % room.players.length;
-        room.currentDrawer = room.players[room.currentDrawerIndex];
-        if (room.currentDrawerIndex === room.players.length - 1) {
-          room.currentRound += 1;
-          if (room.currentRound > room.roomSettings.rounds) {
-            endGame(roomId);
-            return;
-          }
-        }
-
-        for (let player of room.players) {
-          player.hasGuessed = false;
-        }
-
-        room.guessedPlayers = [];
-      } else {
-        room.guessedTeams?.forEach((team) => {
-          console.log("Team guessed:", room.teamScoreBoard);
-          for (let scoreTeamInfo of room.teamScoreBoard) {
-            if (scoreTeamInfo.teamId === team.id) {
-              scoreTeamInfo.score += 100;
-            }
-          }
-        });
-
-        // TODO: handle turn ended for team mode
-        io.to(roomId).emit("turn-ended", {
-          scores: room.scoreBoard,
-          word: room.currentWord,
-          guessedPlayers: room.guessedPlayers,
-        });
-
-        // TODO: maybe handle in another way the current team drawer
-        room.currentTeamDrawerIndex = (room.currentTeamDrawerIndex + 1) % room.teams.length;
-        room.currentTeamDrawer = room.teams[room.currentTeamDrawerIndex];
-
-        if (room.currentTeamDrawerIndex === room.teams.length - 1) {
-          room.currentRound += 1;
-          if (room.currentRound > room.roomSettings.rounds) {
-            endGame(roomId);
-            return;
-          }
-        }
-
-        for (let team of room.teams) {
-          team.hasGuessed = false;
-        }
-
-        room.guessedTeams = [];
-      }
-
-//      startTurn(roomId);
-    }
-
-    function endGame(roomId: string) {
-      const room = rooms[roomId];
-
-      if (room.roomSettings.isClassicMode) {
-        const winner = Object.entries(room.scoreBoard).reduce((prev, current) => (prev[1].score > current[1].score ? prev : current));
-        io.to(roomId).emit("game-ended", { winner, scores: Array.from(room.scoreBoard) });
-      } else {
-        const teamWinner = Object.entries(room.teamScoreBoard).reduce((prev, current) => (prev[1].score > current[1].score ? prev : current));
-        // TODO: handle game ended for team mode
-        io.to(roomId).emit("game-ended", { teamWinner, scores: Array.from(room.teamScoreBoard) });
-      }
-      room.gameStarted = false;
-    }
 
     /////////////////////////////////////////////////////////// TEAM MANAGEMENT ///////////////////////////////////////////////////////////
 
