@@ -1,7 +1,5 @@
-// src/sockets.ts
 import { Server, Socket } from "socket.io";
 import { rooms } from "./rooms";
-import { Player, Room, ScoreBoard } from "./types";
 import { SelectWords } from "./tools/words";
 import { changeTeamPlayMode, addPlayerToTeam, removePlayerFromTeam } from "./teams";
 import { ReceivedMessage, SystemMessage } from "./chat/chat";
@@ -10,10 +8,6 @@ import { ErrorColor, OrangeColor, WarningColor } from "./tools/color";
 import { Message } from "./chat/messageType";
 import { Lobby } from "./room/type";
 import { User } from "./user/type";
-
-function calculateWinner(room: Room) {
-  return room.scoreBoard.reduce((prev, current) => (prev.score > current.score ? prev : current));
-}
 
 export function setupSocket(io: Server) {
   io.on("connection", (socket: Socket) => {
@@ -85,9 +79,9 @@ export function setupSocket(io: Server) {
         // -- Check if there is enough player to continue the 
         if (room.state.isStarted) {
           if (room.settings.gameMode === Lobby.GameMode.Classic && room.users.length < 2) {
-            // TOOD: End the game
+            _EndGame(room.id);
           } else if (room.settings.gameMode === Lobby.GameMode.Team /* && TODO: Team Counter */) {
-            // TOOD: End the game
+            _EndGame(room.id);
           }
 
           // TODO: Update the data of the game

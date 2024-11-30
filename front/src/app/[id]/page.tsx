@@ -24,6 +24,7 @@ import { useRouter } from 'next/navigation';
 import { useRoom } from '@/lib/room/RoomProvider';
 import { User } from '@/lib/player/type';
 import { Lobby } from '@/lib/room/type';
+import { GetPlayerWithId, IsDrawing } from '@/lib/room/function';
 
 export default function Page()
 {
@@ -371,6 +372,9 @@ export default function Page()
     socket.on("turn-ended", (word: string) => {
       setWord(word);
       setWordReveal(false);
+      setIsChoosingWord(false);
+      setWordList([]);
+      setCanDraw(false);
       
       if (gameState !== 'drawing')
         setGameState('guess');
@@ -488,12 +492,18 @@ export default function Page()
                     </div>
                   </div>
                 ) : (
-                  <div className='text-white font-lg'>
-                    {room.settings.gameMode === Lobby.GameMode.Classic ? `${(currentDrawer as User.Player | undefined)?.profile.name} is choosing the word!` : `${(currentDrawer as User.Player[])[0]?.profile.name} is choosing the word!`}
-                  </div>
+                  wordReveal === false ?
+                  (
+                    <div className='text-white font-lg'>
+                      {room.settings.gameMode === Lobby.GameMode.Classic ? `${(currentDrawer as User.Player | undefined)?.profile.name} is choosing the word!` : `${(currentDrawer as User.Player[])[0]?.profile.name} is choosing the word!`}
+                    </div>
+                  ) : (
+                    <div className='text-white font-lg'>
+                      The word was: {word}
+                    </div>
+                  )
                 )
               }
-              {wordReveal && <div className='text-white font-lg'>The word was: {word}</div>}
             </div>
           }
 
@@ -501,19 +511,23 @@ export default function Page()
           {!isStarted && !canDraw && showScore &&
             <div className="absolute w-full h-64 md:h-96 bg-gray-800 bg-opacity-50 border border-gray-900 rounded-md mb-4 flex justify-center items-center z-100">
               <div className="flex-col justify-center items-center">
-                <div className="relative w-[124px] h-[124px] flex items-center justify-center bg-center bg-cover" style={{ backgroundImage: "url('score.gif')" }}>
-                  {winners?.map((winner, index) => (
-                    <div key={index} className="absolute top-0 left-0 w-full h-full flex items-center justify-center">
-                      <div className="bg-white bg-opacity-50 p-4 rounded-md">
+                <div className="relative w-[124px] h-[124px] flex items-center justify-center bg-center bg-cover" style={{ backgroundImage: "url('score.gif')" }} />
+                {winners?.map((winner, index) => (
+                    <div key={index} className="w-full h-full flex items-center justify-center">
+                      <div className="bg-opacity-50 p-4 rounded-md">
                         <div className="text-black font-bold text-lg text-center">
-                          {winner?.profile.name} {winner?.score} points #{index + 1}
+                          {winner?.profile.name} #{index + 1} - Score {winner?.score}
                         </div>
                       </div>
                     </div>
                   ))}
-                </div>
-                <div className='text-white font-lg'>
-                </div>
+                  {(me?.isHost === true || room.isDefault) && (
+                  <div className="w-full flex justify-center m-4">
+                    <button onClick={() => handleStartGame()} className="bg-green-500 hover:bg-green-600 text-white px-6 py-2 rounded-md text-lg font-extrabold">
+                      Start!
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           }
@@ -523,21 +537,7 @@ export default function Page()
 
         {/* Tools (brush) */}
 
-        {/*thisRoom?.roomSettings.isClassicMode && gameStarted && canDraw && isDrawing(me!, thisRoom?.currentDrawer) && (
-          <div className="flex items-center space-x-2 md:space-x-4">
-          <button onClick={() => setTool('pencil')}>Pencil</button>
-          <button onClick={() => setTool('eraser')}>Eraser</button>
-
-          <button
-            onClick={clearCanvas}
-            className="bg-red-400 px-3 md:px-4 py-1 md:py-2 rounded-md text-white"
-          >
-            Clear
-          </button>
-        </div>
-        )}
-
-        {(!thisRoom?.roomSettings.isClassicMode && gameStarted && canDraw && thisRoom?.currentTeamDrawer?.players.find((player : Player) => player.id === me?.id)) && (
+        {isStarted && canDraw && IsDrawing(room.settings.gameMode, GetPlayerWithId(room, socket?.id!)!, currentDrawer) && (
           <div className="flex items-center space-x-2 md:space-x-4">
             <button onClick={() => setTool('pencil')}>Pencil</button>
             <button onClick={() => setTool('eraser')}>Eraser</button>
@@ -549,7 +549,7 @@ export default function Page()
               Clear
             </button>
           </div>
-        )*/}
+        )}
       </div>
 
       {/* Chat */}
