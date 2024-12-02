@@ -3,6 +3,7 @@ import { isDrawing } from "@/lib/player/isDrawing";
 
 // -- Types -- //
 import { Player } from "@/lib/type/types";
+import Image from "next/image";
 
 const PlayerList = ({ players, me, drawer, scoreBoard } : { players?: Player[], me?: Player, drawer?: Player, scoreBoard?: any[] }) => {
   return (
@@ -14,6 +15,7 @@ const PlayerList = ({ players, me, drawer, scoreBoard } : { players?: Player[], 
             className={`p-2 rounded-md mb-2 flex flex-row items-center border-2 border-[#c44b4a] ${isDrawing(player, drawer) ? 'bg-slate-200' : 'bg-gray-100'}`}
           >
             <span className="font-bold mr-4">#{index + 1}</span>
+            <Image className="mr-4" src={`/player-icons/bear/${player.userAvatar ?? 0}.png`} alt={`Player ${player.userName} avatar`} width={32} height={32} />
             <div className="flex flex-col items-center mr-2">
               <span className={`text-center ${me?.id === player.id ? 'text-blue-500' : 'text-gray-800'}`}>{player.userName} {me?.id === player.id ? '(You)' : ''}</span>
               <span className={"font-extralight"}>
