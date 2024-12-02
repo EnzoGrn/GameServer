@@ -120,6 +120,7 @@ export default function Home() {
       };
 
       socket.emit("create-room", data);
+      socket.emit("init-teams", data.roomId);
 
       console.log("Room created with id " + data.roomId);
 
@@ -231,9 +232,9 @@ export default function Home() {
         <div className='w-[40%] h-full max-w-md p-6 bg-white rounded-lg shadow-lg space-y-6'>
           <p className='text-xl font-bold'>Choose your character !</p>
           <div className='flex flex-row justify-around items-center h-full'>
-            <MdArrowBackIos size={50} onClick={() => setPlayerCharacter((prev) => (prev - 1 + playerIconsLength) % playerIconsLength)} />
+            <MdArrowBackIos className="cursor-pointer" size={50} onClick={() => setPlayerCharacter((prev) => (prev - 1 + playerIconsLength) % playerIconsLength)} />
             <Image className="select-none" src={`/player-icons/bear/${playerCharacter ?? 0}.png`} alt="Player Character" width={100} height={100} />
-            <MdArrowBackIos size={50} className="rotate-180" onClick={() => setPlayerCharacter((playerCharacter + 1) % playerIconsLength)} />
+            <MdArrowBackIos size={50} className="rotate-180 cursor-pointer" onClick={() => setPlayerCharacter((playerCharacter + 1) % playerIconsLength)} />
           </div>
         </div>
       </main>
