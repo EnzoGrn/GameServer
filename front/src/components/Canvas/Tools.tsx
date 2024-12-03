@@ -8,8 +8,8 @@ const DrawingTools = ({ onToolChange } : any) => {
   const [activeTool   , setActiveTool]    = useState<ToolsType>("pencil");
 
   const tools = [
-    { name: "pencil", label: "✏️ Crayon" },
-    { name: "eraser", label: "🧽 Gomme" }
+    { name: "pencil", label: "✏️ Pencil" },
+    { name: "eraser", label: "🧽 Eraser" },
   ];
 
   const colors = ["#000000", "#FF0000", "#00FF00", "#0000FF", "#FFFF00", "#FF00FF", "#00FFFF", "#FFFFFF"];
@@ -55,13 +55,14 @@ const DrawingTools = ({ onToolChange } : any) => {
             <button
               key={tool.name}
               className={`px-4 py-2 rounded ${
-                activeTool === tool.name ? "bg-blue-500 text-white" : "bg-gray-200"
+                activeTool === tool.name ? "bg-blue-500 text-[#f9f9f9]" : "bg-gray-200"
               }`}
               onClick={() => handleToolChange(tool.name as ToolsType)}
             >
               {tool.label}
             </button>
           ))}
+          <button className="px-4 py-2 rounded text-[#f9f9f9]" onClick={() => handleToolChange("eraser")}>Clear</button>
         </div>
       </div>
 
