@@ -3,6 +3,7 @@ import { DM_Sans } from 'next/font/google'
 import "./globals.css";
 import { SocketProvider } from "@/components/provider/SocketProvider";
 import React from "react";
+import { AudioProvider } from "@/lib/audio/audioProvider";
 import { RoomProvider } from "@/lib/room/RoomProvider";
 
 /*
@@ -32,11 +33,13 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
       <body className={font.className}>
         <React.StrictMode>
           <SocketProvider>
+            <AudioProvider>
             <RoomProvider>
-              <div className={`flex justify-center items-center flex-col overflow-hidden bg-[url('assets/background.png')]`}>
-                {children}
-              </div>
+            <div className={`flex justify-center items-center flex-col overflow-hidden bg-[url('assets/background.png')]`}>
+              {children}
+            </div>
             </RoomProvider>
+            </AudioProvider>
           </SocketProvider>
         </React.StrictMode>
       </body>
