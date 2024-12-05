@@ -37,11 +37,10 @@ const ListTeams = ({ room }: { room: Lobby.Room }) => {
     <div className="flex-grow flex flex-col h-full p-4 order-2 min-w-80 max-w-80 max-h-96 overflow-y-visible z-10">
       <ul className="flex-grow overflow-visible">
         {teams && teams.map((team: Lobby.Team, Tindex: number) => (
-          <li key={Tindex} className={`p-4 rounded-md mb-4 flex flex-col border-2 border-[#c44b4a] ${team.players.some(p => p.hasGuessed) ? 'bg-[#22c553]' : 'bg-[#f9f9f9]'}`}>
-            
+          <li key={Tindex} className={`p-4 rounded-md mb-4 flex flex-col border-2 border-[#c44b4a] ${team.players[0]?.hasGuessed ? 'bg-[#22c553]' : 'bg-[#f9f9f9]'}`}>
             <div className="flex justify-between items-center mb-4">
               <span className="font-bold text-lg">{team.name}</span>
-              {(!team.players.find(p => p.profile.id === socket?.id)) && (
+              {!room.state.isStarted && (!team.players.find(p => p.profile.id === socket?.id)) && (
                 <button 
                   className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition"
                   onClick={() => joinTeam(team.id)}

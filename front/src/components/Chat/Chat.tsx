@@ -3,7 +3,6 @@ import { useSocket } from "../provider/SocketProvider";
 import { useMessages } from "@/lib/chat/chatProvider";
 import { useEffect, useRef, useState } from "react";
 import { SendMessage } from "@/lib/chat/message";
-import { Socket } from 'socket.io-client';
 import { Lobby } from "@/lib/room/type";
 import MessageView from "./Message";
 import { User } from "@/lib/player/type";
@@ -43,7 +42,7 @@ const Chat = () => {
     try {
       if (message.type !== MessageType.SECRET)
         newMessage(message);
-      else if (room.settings.gameMode === Lobby.GameMode.Classic) {
+      else if (!Array.isArray(room.currentDrawer)) {
         const user: User.Player | undefined = room.currentDrawer as User.Player | undefined;
 
         if (user?.profile?.id === socket?.id || GetPlayerWithId(room, socket!.id!)?.hasGuessed === true || message.sender_id === socket?.id)

@@ -15,7 +15,6 @@ import { Socket } from 'socket.io-client';
 import p5 from 'p5';
 
 // -- Types -- //
-import { Player, Room, ScoreBoard, Team } from '@/lib/type/types';
 import { MouseData } from '@/lib/type/mouseData';
 import UserList from '@/components/list/SwitchButtonMode';
 import Chat from '@/components/Chat/Chat';
@@ -77,6 +76,8 @@ export default function Page()
   const [gameState, setGameState] = useState<GameState>('waiting');
   const [canDraw  , setCanDraw]   = useState<boolean>(false); // Allow the user to draw on canvas (disable, during score reveal, choosing word, etc.)
   const [isStarted, setIsStarted] = useState<boolean>(false);
+  const [settings, setSettings] = useState<Lobby.Settings>(room.settings);
+  const settingRef = useRef(settings);
 
   useEffect(() => {
     if (!socket)
@@ -91,7 +92,7 @@ export default function Page()
 
       clearCanvas();
 
-      if (room.settings.gameMode === Lobby.GameMode.Classic) {
+      if (settings.gameMode === Lobby.GameMode.Classic) {
         if ((drawer as User.Player).profile.id === socket.id) {
           setGameState('choose');
           setWordList(words);
@@ -111,7 +112,7 @@ export default function Page()
     return () => {
       socket.off("pre-starting-turn");
     }
-  }, [socket, room]);
+  }, [socket, room, settings]);
 
   const [me, setMe] = useState<User.Player | undefined>(undefined);
   
@@ -176,16 +177,13 @@ export default function Page()
       if (state.isChoosingWord)
         setWordReveal(false);
       if (!canDraw)
-        setTimeLeft(room.settings.drawTime);
+        setTimeLeft(settings.drawTime);
     });
 
     return () => {
       socket.off("update-state");
     }
   }, [socket, room]);
-
-  const [settings, setSettings] = useState<Lobby.Settings>(room.settings);
-  const settingRef = useRef(settings);
 
   useEffect(() => {
     if (!socket)
@@ -267,7 +265,7 @@ export default function Page()
     return () => {
       p5Instance?.remove();
     };
-  }, [room, socket, currentDrawer, color, strokeWidth, tool]);
+  }, [room, socket, currentDrawer, color, strokeWidth, tool, settings]);
 
 
   const sketch = (p: p5, socket: Socket) => {
@@ -301,11 +299,11 @@ export default function Page()
         return;
       const drawers = drawersRef.current;
 
-      if (room.settings.gameMode === Lobby.GameMode.Classic) {
-        if ((drawers as User.Player | undefined)?.profile.id !== socket.id)
+      if (Array.isArray(drawers)) {
+        if (!(drawers as User.Player[])?.find((player: User.Player) => player.profile.id === socket.id))
           return;
       } else {
-        if (!(drawers as User.Player[])?.find((player: User.Player) => player.profile.id === socket.id))
+        if ((drawers as User.Player | undefined)?.profile.id !== socket.id)
           return;
       }
       
@@ -423,6 +421,21 @@ export default function Page()
   useEffect(() => {
     if (!socket)
       return;
+    socket.on("update-room", (data: Lobby.Room) => {
+      console.log("[update-room]: ", data);
+
+      setRoom(data);
+      setSettings(data.settings);
+    });
+
+    return () => {
+      socket.off("update-room");
+    };
+  }, [socket, room]);
+
+  useEffect(() => {
+    if (!socket)
+      return;
     socket.on("turn-ended", (word: string) => {
       setWord(word);
       setWordReveal(false);
@@ -457,13 +470,13 @@ export default function Page()
     };
   }, [socket, timeLeft]);
 
-  const [winners  , setWinners]     = useState<User.Player[]>([]);
+  const [winners  , setWinners]     = useState<User.Player[] | Lobby.Team>([]);
   const [showScore, setShowScore]   = useState<boolean>(false);
 
   useEffect(() => {
     if (!socket)
       return;
-    socket.on("game-ended", (winners: User.Player[]) => {
+    socket.on("game-ended", (winners: User.Player[] | Lobby.Team) => {
       setShowScore(true);
       setCanDraw(false);
       setIsStarted(false);
@@ -500,7 +513,7 @@ export default function Page()
   }, [settings]);
 
   const handleMaxPlayersChange = (value: number) => {
-    setRoom({ ...room, settings: { ...room.settings, maxPlayer: value } });
+    setRoom({ ...room, settings: { ...settings, maxPlayer: value } });
     setSettings({ ...settings, maxPlayer: value });
 
     socket?.emit("update-max-players", {
@@ -510,7 +523,7 @@ export default function Page()
   };
 
   const handleMaxTeamsChange = (value: number) => {
-    setRoom({ ...room, settings: { ...room.settings, numTeams: value } });
+    setRoom({ ...room, settings: { ...settings, numTeams: value } });
     setSettings({ ...settings, numTeams: value });
 
     socket?.emit("update-number-teams", {
@@ -520,7 +533,7 @@ export default function Page()
   };
 
   const handleMaxTimeDrawingChange = (value: number) => {
-    setRoom({ ...room, settings: { ...room.settings, drawTime: value } });
+    setRoom({ ...room, settings: { ...settings, drawTime: value } });
     setSettings({ ...settings, drawTime: value });
 
     socket?.emit("update-draw-time", {
@@ -530,7 +543,7 @@ export default function Page()
   };
 
   const handleMaxRoundsChange = (value: number) => {
-    setRoom({ ...room, settings: { ...room.settings, maxTurn: value } });
+    setRoom({ ...room, settings: { ...settings, maxTurn: value } });
     setSettings({ ...settings, maxTurn: value });
 
     socket?.emit("update-max-rounds", {
@@ -540,7 +553,7 @@ export default function Page()
   };
 
   const handleLanguageChange = (value: string) => {
-    setRoom({ ...room, settings: { ...room.settings, language: value } });
+    setRoom({ ...room, settings: { ...settings, language: value } });
     setSettings({ ...settings, language: value });
 
     socket?.emit("update-language", {
@@ -552,7 +565,7 @@ export default function Page()
   const handleGameModeChange = (value: string) => {
     var gameMode: Lobby.GameMode = value === "Classic" ? Lobby.GameMode.Classic : Lobby.GameMode.Team;
 
-    setRoom({ ...room, settings: { ...room.settings, gameMode } });
+    setRoom({ ...room, settings: { ...settings, gameMode } });
     setSettings({ ...settings, gameMode: gameMode });
 
     socket?.emit("update-gamemode", {
@@ -562,7 +575,7 @@ export default function Page()
   };
 
   const handleCustomWordsOnlyChange = (value: boolean) => {
-    setRoom({ ...room, settings: { ...room.settings, useCustomWordsOnly: value } });
+    setRoom({ ...room, settings: { ...settings, useCustomWordsOnly: value } });
     setSettings({ ...settings, useCustomWordsOnly: value });
 
     socket?.emit("update-custom-words-only", {
@@ -572,7 +585,7 @@ export default function Page()
   };
 
   const handleCustomWordsChange = (value: string) => {
-    setRoom({ ...room, settings: { ...room.settings, customWords: value } });
+    setRoom({ ...room, settings: { ...settings, customWords: value } });
     setSettings({ ...settings, customWords: value });
 
     socket?.emit("update-custom-words", {
@@ -588,7 +601,7 @@ export default function Page()
       <div className="col-span-3 w-full bg-[#f37b78] text-white p-4 flex justify-between items-center border-b-2 border-b-[#c44b4a]">
         <Clock time={timeLeft} />
         <WordDisplay gameState={gameState} word={word.toLowerCase()}  />
-        <Round currentRound={currentTurn} totalRounds={room.settings.maxTurn} />
+        <Round currentRound={currentTurn} totalRounds={settings.maxTurn} />
       </div>
 
       {/* Player List */}
@@ -780,9 +793,7 @@ export default function Page()
                 </div>
               ) : wordReveal === false ? (
                 <div className="text-white text-center font-lg">
-                  {room.settings.gameMode === Lobby.GameMode.Classic
-                    ? `${(currentDrawer as User.Player)?.profile.name} is choosing the word!`
-                    : `${(currentDrawer as User.Player[])[0]?.profile.name} is choosing the word!`}
+                  {settings && settings.gameMode === Lobby.GameMode.Classic ? `${(currentDrawer as User.Player)?.profile.name} is choosing the word!` : `The team is choosing the word!`}
                 </div>
               ) : (
                 <div className="text-white text-center font-lg">
@@ -797,7 +808,7 @@ export default function Page()
           {showScore && (
             <div className="absolute w-full h-64 md:h-96 bg-gray-800 bg-opacity-70 rounded-md flex flex-col justify-center items-center z-10">
               <div className="w-32 h-32 bg-center bg-cover mb-4" style={{ backgroundImage: "url('score.gif')" }} />
-              {winners?.map((winner, index) => (
+              {settings.gameMode === Lobby.GameMode.Classic && (winners as User.Player[])?.map((winner, index) => (
                 <div
                   key={index}
                   className="bg-white bg-opacity-90 text-black text-lg font-bold px-4 py-2 rounded-md shadow-md mb-2"
@@ -805,6 +816,11 @@ export default function Page()
                   {winner?.profile.name} #{index + 1} - Score {winner?.score}
                 </div>
               ))}
+              {settings.gameMode === Lobby.GameMode.Team && (
+                <div className="bg-white bg-opacity-90 text-black text-lg font-bold px-4 py-2 rounded-md shadow-md mb-2">
+                  {(winners as Lobby.Team)?.name} - Score {(winners as Lobby.Team)?.score}
+                </div>
+              )}
               {(me?.isHost || room.isDefault) && (
                 <button
                   onClick={handleStartGame}
@@ -824,7 +840,7 @@ export default function Page()
         </div>
 
         {/* Tools (brush) */}
-        {isStarted && canDraw && IsDrawing(room.settings.gameMode, GetPlayerWithId(room, socket?.id!)!, currentDrawer) && (
+        {isStarted && canDraw && IsDrawing(settings.gameMode, GetPlayerWithId(room, socket?.id!)!, currentDrawer) && (
           <DrawingTools onToolChange={handleToolChange} />
         )}
       </div>

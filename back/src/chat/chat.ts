@@ -20,7 +20,13 @@ const _CheckMessage = (room: Lobby.Room, player: User.Player, message: string): 
         if (room.settings.gameMode === Lobby.GameMode.Classic) {
             player.hasGuessed = true;
         } else {
-            // Every player in the team has to find the word.
+            const inTeamIndex: number = room.teams.findIndex((team) => team.players.find(p => p.profile.id === player.profile.id));
+
+            if (inTeamIndex === -1)
+                return -1;
+            room.teams[inTeamIndex].players.forEach((player) => {
+                player.hasGuessed = true;
+            });
         }
 
         return 1;

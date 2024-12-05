@@ -20,9 +20,8 @@ const _LoadWordsFromFile = (language: string) => {
     }
 };
 
-const _SelectRandWords = (word: string): { id: number, text: string }[] => {
+const _SelectRandWords = (words: string[]): { id: number, text: string }[] => {
     let word1, word2, word3: { id: number, text: string };
-    let words: string[] = word.split(';');
 
     do {
         word1 = { id: 1, text: words[Math.floor(Math.random() * words.length)] };
@@ -35,11 +34,11 @@ const _SelectRandWords = (word: string): { id: number, text: string }[] => {
 
 export const SelectWords = (room: Lobby.Room): { id: number, text: string }[] => {
     if (room.settings.useCustomWordsOnly && room.settings.customWords.length > 0)
-        return _SelectRandWords(room.settings.customWords);
+        return _SelectRandWords(room.settings.customWords?.split(";"));
     var words = _LoadWordsFromFile(room.settings.language);
 
     if (room.settings.customWords && room.settings.customWords.length > 0)
-        words = words.concat(room.settings.customWords);
+        words = words.concat(room.settings.customWords.split(';'));
     if (words.length === 0)
         return [{ id: 1, text: "No words available" }, { id: 2, text: "No words available" }, { id: 3, text: "No words available" }];
     return _SelectRandWords(words);

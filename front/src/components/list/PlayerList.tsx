@@ -64,7 +64,7 @@ const PlayerList = ({ room }: { room: Lobby.Room }) => {
                   }}
                 />
               }
-              <div className="avatar indicator">
+              <div className="indicator">
                 {player.isHost === true &&
                   <div
                   className="indicator-item w-[24px] h-[24px] bg-center bg-cover"
@@ -75,7 +75,7 @@ const PlayerList = ({ room }: { room: Lobby.Room }) => {
                   />
                 }
                 <div className="w-12">
-                  <img src={`/player-icons/bear/${player.profile.avatar}.png`} alt="avatar" className="rounded-full" />
+                  <img src={`/player-icons/bear/${player.profile.avatar}.png`} alt="avatar" />
                 </div>
               </div>
             </div>
