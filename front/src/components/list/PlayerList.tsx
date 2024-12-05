@@ -1,36 +1,61 @@
-// -- Function -- //
-import { isDrawing } from "@/lib/player/isDrawing";
+import { User } from "@/lib/player/type";
+import { IsDrawing } from "@/lib/room/function";
+import { useSocket } from "../provider/SocketProvider";
+import { Lobby } from "@/lib/room/type";
+import { useEffect, useState } from "react";
+import { useRoom } from "@/lib/room/RoomProvider";
 
-// -- Types -- //
-import { Player } from "@/lib/type/types";
-import Image from "next/image";
+const PlayerList = ({ room }: { room: Lobby.Room }) => {
+  const { socket } = useSocket();
+  const { setRoom } = useRoom();
 
-const PlayerList = ({ players, me, drawer, scoreBoard, guessed }: { players?: Player[], me?: Player, drawer?: Player, scoreBoard?: any[], guessed ?: Player[] }) => {
+  const [users, setUsers] = useState<User.Player[]>(room.users);
 
-  const hasGuessed = (player: Player, guessed?: Player[]): boolean => {
-    if (!guessed) return false;
-    return guessed.some((guessedPlayer: Player) => guessedPlayer.id === player.id);
-  }
+  useEffect(() => {
+    if (!socket)
+      return;
+    socket.on('update-room', (room: Lobby.Room) => {
+      console.log("[update-room]: ", room);
+
+      setUsers(room.users);
+    });
+
+    return () => {
+      socket.off('update-room');
+    }
+  }, [socket, room]);
+
+  useEffect(() => {
+    if (!socket)
+      return;
+    socket.on('update-users', (users: User.Player[]) => {
+      console.log("[update-users]: ", users);
+
+      setUsers(users);
+      setRoom({ ...room, users: users });
+    });
+
+    return () => {
+      socket.off('update-room');
+    }
+  }, [socket, users, room]);
 
   return (
     <div className="flex-grow flex flex-col h-full p-4 order-2 min-w-80 max-w-80">
       <ul className="flex-grow overflow-visible">
-        {players && players.map((player: Player, index: number) => (
-          <li
-            key={player.id}
-            className={`p-2 rounded-md mb-2 flex flex-row items-center border-2 border-[#c44b4a] overflow-visible ${hasGuessed(player, guessed) ? 'bg-[#22c553]' : 'bg-[#f9f9f9]'}`}
-          >
+        {users && users.map((player: User.Player, index: number) => (
+          <li key={index} className={`p-2 rounded-md mb-2 flex flex-row items-center border-2 border-[#c44b4a] overflow-visible ${player.hasGuessed === true ? 'bg-[#22c553]' : 'bg-[#f9f9f9]'}`}>
             <span className="font-bold mr-4">#{index + 1}</span>
             <div className="flex justify-between w-full">
               <div className="flex flex-col items-start mr-2 w-1/2 max-w-[1/2]">
-                <span className={`text-start ${me?.id === player.id ? 'text-blue-500' : 'text-gray-800'} text-nowrap`}>
-                  {player.userName.slice(0, 12)} {me?.id === player.id ? '(You)' : ''}
+                <span className={`text-start ${socket?.id === player.profile.id ? 'text-blue-500' : 'text-gray-800'} text-nowrap`}>
+                  {player.profile.name.slice(0, 12)} {socket?.id === player.profile.id ? '(You)' : ''}
                 </span>
                 <span className="font-extralight">
-                  {scoreBoard?.find((score: any) => score.playerId === player.id)?.score || 0} points
+                  {player.score} points
                 </span>
               </div>
-              {isDrawing(player, drawer) &&
+              {IsDrawing(room.settings.gameMode, player, room.currentDrawer) &&
                 <div
                   className="w-[48px] h-[48px] bg-center bg-cover"
                   style={{
@@ -39,8 +64,8 @@ const PlayerList = ({ players, me, drawer, scoreBoard, guessed }: { players?: Pl
                   }}
                 />
               }
-              <div className="avatar indicator w-auto">
-                {player.host === true &&
+              <div className="avatar indicator">
+                {player.isHost === true &&
                   <div
                   className="indicator-item w-[24px] h-[24px] bg-center bg-cover"
                   style={{
@@ -50,7 +75,7 @@ const PlayerList = ({ players, me, drawer, scoreBoard, guessed }: { players?: Pl
                   />
                 }
                 <div className="w-12">
-                <Image src={`/player-icons/bear/${player.userAvatar ?? 0}.png`} alt={`Player ${player.userName} avatar`} width={80} height={80} />
+                  <img src={`/player-icons/bear/${player.profile.avatar}.png`} alt="avatar" className="rounded-full" />
                 </div>
               </div>
             </div>
@@ -62,4 +87,3 @@ const PlayerList = ({ players, me, drawer, scoreBoard, guessed }: { players?: Pl
 };
 
 export default PlayerList;
-

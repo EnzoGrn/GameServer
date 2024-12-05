@@ -16,32 +16,22 @@ import { Socket } from 'socket.io-client';
 import p5 from 'p5';
 
 // -- Types -- //
-import { Player, Room, Message, ScoreBoard, Team } from '@/lib/type/types';
+import { Player, Room, ScoreBoard, Team } from '@/lib/type/types';
 import { MouseData } from '@/lib/type/mouseData';
-import { isDrawing } from '@/lib/player/isDrawing';
 import UserList from '@/components/list/SwitchButtonMode';
 import Chat from '@/components/Chat/Chat';
 import { MessagesProvider } from '@/lib/chat/chatProvider';
+import { useRouter } from 'next/navigation';
+import { useRoom } from '@/lib/room/RoomProvider';
+import { User } from '@/lib/player/type';
+import { Lobby } from '@/lib/room/type';
+import { GetPlayerWithId, IsDrawing } from '@/lib/room/function';
+import DrawingTools, { ToolsType } from '@/components/Canvas/Tools';
 
-export default function Page() {
-  // -- The socket -- //
-  const { socket }: { socket: Socket | null } = useSocket();
-  const roomRef = useRef<Room | null>(null);
-  const [thisRoom, setRoom] = useState<Room | null>(null);
-
-  socket?.on('room-data-updated', ({ room }: { room: Room }) => {
-    if (room) {
-      console.log('Room updated:', room);
-      setRoom(room);
-      for (let player of room.players) {
-        if (player.id === socket.id) {
-          setMe(player);
-        }
-      }
-    }
-  });
-
+export default function Page()
+{
   // -- Get the room ID from the URL -- //
+  
   const params = useParams<{ id: string }>();
   const [inviteLink, setInviteLink] = useState<string>('');
 
@@ -54,53 +44,209 @@ export default function Page() {
     }
   }, [params]);
 
+  // -- Socket & Room -- //
+
+  const { socket        } = useSocket();
+  const { room, setRoom } = useRoom();
+  
+  const router = useRouter();
+
+  useEffect(() => {
+    if (!params.id) {
+      router.push('/');
+
+      return;
+    }
+    const user: User.Player | undefined = room.users.find((player) => player.profile.id === socket?.id);
+
+    if (!user)
+      router.push('/');
+  }, [params, room]);
+
+  useEffect(() => {
+    if (!socket)
+      return;
+    socket.on("go-home", () => {
+      router.push("/");
+    });
+
+    return () => {
+      socket.off("go-home");
+    }
+  }, [socket]);
+
+  const [gameState, setGameState] = useState<GameState>('waiting');
+  const [canDraw  , setCanDraw]   = useState<boolean>(false); // Allow the user to draw on canvas (disable, during score reveal, choosing word, etc.)
+  const [isStarted, setIsStarted] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (!socket)
+      return;
+    socket.on("pre-starting-turn", ({ drawer, round, words }: { drawer: User.Player | User.Player[], round: number, words: { id: number, text: string }[] }) => {
+      console.log("[pre-starting-turn]: ", drawer, round, words);
+
+      setRoom({ ...room, currentDrawer: drawer, currentTurn: round });
+      setCurrentTurn(round);
+      setCurrentDrawer(drawer);
+      setWordReveal(false);
+
+      clearCanvas();
+
+      if (room.settings.gameMode === Lobby.GameMode.Classic) {
+        if ((drawer as User.Player).profile.id === socket.id) {
+          setGameState('choose');
+          setWordList(words);
+        } else {
+          setGameState('waiting');
+        }
+      } else {
+        if ((drawer as User.Player[]).find((player) => player.profile.id === socket.id)) {
+          setGameState('choose');
+          setWordList(words);
+        } else {
+          setGameState('waiting');
+        }
+      }
+    });
+
+    return () => {
+      socket.off("pre-starting-turn");
+    }
+  }, [socket, room]);
+
+  const [me, setMe] = useState<User.Player | undefined>(undefined);
+  
+  useEffect(() => {
+    setMe(room.users.find((player) => player.profile.id === socket?.id));
+  }, [room]);
+
+  const [wordList      , setWordList]       = useState<{ id: number, text: string }[]>([]);
+  const [word          , setWord] = useState<string>('');
+  const [isChoosingWord, setIsChoosingWord] = useState<boolean>(false);
+
+  const handleStartGame = () => {
+    if (room.isDefault || me?.isHost === true) {
+      socket?.emit("start-game", room.id as string);
+
+      setGameState('waiting');
+      setWordList([]);
+      setWord('');
+    }
+  }
+
+  const ChooseWord = (word: string) => {
+    socket?.emit("word-chosen", {
+      room_id: room.id as string,
+      word   : word as string
+    });
+  };
+
+  useEffect(() => {
+    if (!socket)
+      return;
+    socket.on("word-chosen", (word: string) => {
+      setRoom({ ...room, currentWord: word });
+      setWordList([]);
+      setWord(word);
+
+      if (gameState === 'choose') {
+        setGameState('drawing');
+      } else {
+        setGameState('guessing');
+      }
+    });
+
+    return () => {
+      socket.off("word-chosen");
+    }
+  }, [socket, gameState]);
+
+  useEffect(() => {
+    if (!socket)
+      return;
+    socket.on("update-state", (state: Lobby.State) => {
+      console.log("[update-state]: ", state);
+
+      setRoom({ ...room, state });
+
+      setCanDraw(state.canDraw);
+      setIsChoosingWord(state.isChoosingWord);
+      setIsStarted(state.isStarted);
+      setShowScore(state.showScore);
+      
+      if (state.isChoosingWord)
+        setWordReveal(false);
+      if (!canDraw)
+        setTimeLeft(room.settings.drawTime);
+    });
+
+    return () => {
+      socket.off("update-state");
+    }
+  }, [socket, room]);
+
+  const [currentDrawer, setCurrentDrawer] = useState<User.Player | User.Player[] | undefined>(undefined);
+
   // -- Canvas -- //
 
   const canvasParentRef = useRef<HTMLDivElement | null>(null);
   const hiddenCanvasRef = useRef<HTMLDivElement | null>(null); // Hidden canvas for resizing the main canvas
   const [p5Instance, setP5Instance] = useState<p5 | null>(null);
+  const [canvas, setCanvas] = useState<p5.Renderer | null>(null);
+  const canDrawRef = useRef<boolean>(canDraw);
+  const isChoosingWordRef = useRef<boolean>(isChoosingWord);
+  const drawersRef = useRef<User.Player | User.Player[] | undefined>(currentDrawer);
+
+  useEffect(() => {
+    isChoosingWordRef.current = isChoosingWord;
+  }, [isChoosingWord]);
+
+  useEffect(() => {
+    drawersRef.current = currentDrawer;
+  }, [currentDrawer]);
+
+  useEffect(() => {
+    canDrawRef.current = canDraw;
+  }, [canDraw]);
+
+  const [tool       , setTool] = useState<ToolsType>('pencil');
+  const [strokeWidth, setStrokeWidth] = useState<number>(5);
+  const [color      , setColor] = useState<string>('#000000');
+
+  const colorRef = useRef(color);
+
+  useEffect(() => {
+    colorRef.current = color;
+  }, [color]);
+
+  const strokeWidthRef = useRef(strokeWidth);
+
+  useEffect(() => {
+    strokeWidthRef.current = strokeWidth;
+  }, [strokeWidth]);
 
   useSafeEffect(() => {
-    if (socket && !p5Instance) {
-      socket.on('send-room', (room: Room) => {
-        setRoom(room);
-
-        for (let player of room.players) {
-          if (player.id === socket.id) {
-            setMe(player);
-          }
-        }
-
-        console.log('Room:', room);
-      });
-
-      socket.emit('get-room', params.id);
-    }
-
     if (canvasParentRef.current && socket && !p5Instance) {
-      console.log('Creating P5 instance...');
-
       setP5Instance(new p5((p: p5) => sketch(p, socket), canvasParentRef.current));
     }
 
     return () => {
       p5Instance?.remove();
     };
-  }, [thisRoom, socket]);
+  }, [room, socket, currentDrawer, color, strokeWidth, tool]);
 
-  useEffect(() => {
-    roomRef.current = thisRoom;
-  }, [thisRoom]);
 
   const sketch = (p: p5, socket: Socket) => {
     p.setup = () => {
       if (canvasParentRef.current) {
         const { width, height } = canvasParentRef.current.getBoundingClientRect();
-        const canvas = p.createCanvas(width, height);
+        const canvas: p5.Renderer = p.createCanvas(width, height);
 
         p.background(255);
 
         canvas.parent(canvasParentRef.current);
+
+        setCanvas(canvas);
 
         socket.on('mouse', (data: MouseData) => {
           if (socket?.id === data?.senderId)
@@ -114,24 +260,26 @@ export default function Page() {
     };
 
     p.mouseDragged = () => {
-      const room: Room | null = roomRef.current;
-      const draw: boolean = canDrawRef.current;
+      const draw: boolean         = canDrawRef.current;
       const choosingWord: boolean = isChoosingWordRef.current;
 
       if (!draw || choosingWord || !room || !socket)
         return;
+      const drawers = drawersRef.current;
 
-      if (room?.roomSettings.isClassicMode) {
-        if (room?.currentDrawer?.id !== socket.id)
+      if (room.settings.gameMode === Lobby.GameMode.Classic) {
+        if ((drawers as User.Player | undefined)?.profile.id !== socket.id)
           return;
       } else {
-        if (!room?.currentTeamDrawer?.players.find((player) => player.id === socket.id))
+        if (!(drawers as User.Player[])?.find((player: User.Player) => player.profile.id === socket.id))
           return;
       }
 
       const currentTool = toolRef.current;
-      const x = p.mouseX;
-      const y = p.mouseY;
+      const currentColor = colorRef.current;
+      const currentStrokeWidth  = strokeWidthRef.current;
+      const x  = p.mouseX;
+      const y  = p.mouseY;
       const px = p.pmouseX;
       const py = p.pmouseY;
 
@@ -141,10 +289,10 @@ export default function Page() {
         y,
         px,
         py,
-        color: currentTool === 'eraser' ? '#FFFFFF' : '#000000',
-        strokeWidth: currentTool === 'eraser' ? strokeWidth * 2 : strokeWidth,
+        color      : currentTool === 'eraser' ? '#FFFFFF' : currentColor,
+        strokeWidth: currentTool === 'eraser' ? currentStrokeWidth * 2 : currentStrokeWidth,
         senderId: socket.id || '',
-        roomCode: room?.id || '',
+        roomCode: room.id || '',
       };
 
       socket.emit('mouse', data);
@@ -155,15 +303,29 @@ export default function Page() {
     };
 
     p.draw = () => {
-      // Pas d'animation en continu nécessaire
     };
   };
+
+  useEffect(() => {
+    if (!socket)
+      return;
+
+    const handleYouGuessed = () => {
+      setGameState("guess");
+    };
+
+    socket.on("you-guessed", handleYouGuessed);
+
+    return () => {
+      socket.off("you-guessed", handleYouGuessed);
+    };
+  }, [socket]);
 
   /*
    * @brief Resize the canvas when the window is resized
    */
   useEffect(() => {
-    const resizeCanvas = () => {
+    const resizeCanvas = () => { // TODO: Find a way to get the canvas from server for refreshing the canvas
       if (hiddenCanvasRef.current) {
         const { width, height } = hiddenCanvasRef.current.getBoundingClientRect();
 
@@ -209,244 +371,90 @@ export default function Page() {
     }
   };
 
-  // -- My profile -- //
-  const [me, setMe] = useState<Player | undefined>(undefined);
-  const meRef = useRef<Player | undefined>(me);
+  const [currentTurn, setCurrentTurn] = useState<number>(0);
 
   useEffect(() => {
-    meRef.current = me;
-  }, [me]);
-
-  // -- Word List -- //
-  const [wordList, setWordList] = useState<{ id: number, text: string }[]>([]);
-  const [isChoosingWord, setIsChoosingWord] = useState<boolean>(false);
-
-  const isChoosingWordRef = useRef<boolean>(isChoosingWord);
-
-  useEffect(() => {
-    isChoosingWordRef.current = isChoosingWord;
-  }, [isChoosingWord]);
-
-  // -- Game State -- //
-  const [gameState, setGameState] = useState<GameState>('waiting');
-  const [word, setWord] = useState<string>('');
-  const [gameStarted, setGameStarted] = useState<boolean>(false);
-  const [canDraw, setCanDraw] = useState<boolean>(false);
-  const [timeLeft, setTimeLeft] = useState<number>(0);
-  const [showScore, setShowScore] = useState<boolean>(false);
-  const [winner, setWinner] = useState<{ id: string; score: number } | null>(null);
-
-  const canDrawRef = useRef<boolean>(canDraw);
-
-  useEffect(() => {
-    canDrawRef.current = canDraw;
-  }, [canDraw]);
-
-  /*
-   * @brief Callback of the started button for launching the game
-   * @note Only the host can start the game
-   */
-  const handleStartGame = () => {
-    if (me?.host == false)
+    if (!socket)
       return;
-    socket?.emit("start-game", {
-      roomCode: thisRoom?.id
+    socket.on("update-round", (round: number) => {
+      setCurrentTurn(round);
+      setRoom({ ...room, currentTurn: round });
     });
 
-    setShowScore(false);
-  }
-
-  /*
-   * @brief Function call every time a turn is started
-   */
-  useEffect(() => {
-    if (!socket)
-      return;
-    const handleTurnStarted = ({ drawer, round }: { drawer: Player; round: number }) => {
-      setRoom((prevRoom) => prevRoom ? { ...prevRoom, currentDrawer: drawer, currentRound: round } : prevRoom);
-      setTimeLeft(thisRoom?.roomSettings?.drawTime || 60);
-      setCanDraw(false);
-      setGameStarted(true);
-
-      clearCanvas();
-    };
-
-    const handleTurnStartedTeam = ({ currentTeamDrawer, round, currentDrawer }: { currentTeamDrawer: Team; round: number, currentDrawer: Player }) => {
-      setRoom((prevRoom) => prevRoom ? { ...prevRoom, currentTeamDrawer: currentTeamDrawer, currentDrawer: currentDrawer, currentRound: round } : prevRoom);
-      setTimeLeft(thisRoom?.roomSettings?.drawTime || 60);
-      setCanDraw(false);
-      setGameStarted(true);
-
-      clearCanvas();
-    }
-
-    socket.on("turn-started", handleTurnStarted);
-    socket.on("turn-started-team", handleTurnStartedTeam);
-
     return () => {
-      socket.off("turn-started", handleTurnStarted);
-      socket.off("turn-started-team", handleTurnStartedTeam);
+      socket.off("update-round");
     };
-  }, [socket, thisRoom]);
+  }, [socket, currentTurn, room]);
 
   useEffect(() => {
     if (!socket)
       return;
-    const handleChooseWord = ({ words }: { words: { id: number, text: string }[] }) => {
-      console.log("Words to choose: ", words);
-
-      setGameState('choose');
-      setWordList(words);
-      setIsChoosingWord(true);
-    };
-
-    socket.on("choose-word", handleChooseWord);
-
-    return () => {
-      socket.off("choose-word", handleChooseWord);
-    };
-  }, [socket]);
-
-  useEffect(() => {
-    if (!socket)
-      return;
-    const handleWordChosen = ({ currentWord, wordLength }: { currentWord: string, wordLength: number }) => {
+    socket.on("turn-ended", (word: string) => {
+      setWord(word);
+      setWordReveal(false);
       setIsChoosingWord(false);
-
-      if (thisRoom?.currentDrawer?.id !== socket.id)
-        setRoom((prevRoom) => prevRoom ? { ...prevRoom, currentWord: "_".repeat(wordLength) } : prevRoom);
-      else
-        setRoom((prevRoom) => prevRoom ? { ...prevRoom, currentWord } : prevRoom);
-
-      if (me?.id === thisRoom?.currentDrawer?.id)
-        setGameState('drawing');
-      else
-        setGameState('guessing');
-      setCanDraw(true);
-    };
-
-    const HandleWordChosenTeam = ({ currentWord, wordLength, DrawerPlayersTeam }: { currentWord: string, wordLength: number, DrawerPlayersTeam: Player[] }) => {
-
-      setIsChoosingWord(false);
-
-      if (DrawerPlayersTeam.find((player) => player.id === me?.id)) {
-        setRoom((prevRoom) => prevRoom ? { ...prevRoom, currentWord } : prevRoom);
-      } else {
-        setRoom((prevRoom) => prevRoom ? { ...prevRoom, currentWord: "_".repeat(wordLength) } : prevRoom);
-      }
-
-      // check if the player is in the team that can draw
-      if (DrawerPlayersTeam.find((player) => player.id === me?.id)) {
-        setGameState('drawing');
-      } else {
-        setGameState('guessing');
-      }
-      setCanDraw(true);
-    };
-
-    socket.on("word-chosen", handleWordChosen);
-    socket.on("word-chosen-team", HandleWordChosenTeam);
+      setWordList([]);
+      setCanDraw(false);
+      
+      if (gameState !== 'drawing')
+        setGameState('guess');
+      setWordReveal(true);
+    });
 
     return () => {
-      socket.off("word-chosen", handleWordChosen);
-      socket.off("word-chosen-team", HandleWordChosenTeam);
+      socket.off("turn-ended");
     };
-  }, [socket, thisRoom]);
+  }, [socket, room]);
 
-  const chooseWord = (word: string) => {
-    socket?.emit("word-chosen", { roomId: thisRoom?.id, word });
-  };
-
-  useEffect(() => {
-    if (!socket) return;
-
-    const handleYouGuessed = () => {
-      setGameState("guess");
-    };
-
-    socket.on("you-guessed", handleYouGuessed);
-
-    return () => {
-      socket.off("you-guessed", handleYouGuessed);
-    };
-  }, [socket]);
+  const [wordReveal, setWordReveal] = useState<boolean>(false);
+  const [timeLeft  , setTimeLeft]    = useState<number>(0);
 
   useEffect(() => {
     if (!socket)
       return;
-    const handleTimerUpdate = ({ timeLeft }: { timeLeft: number }) => {
-      console.log("Timer update:", timeLeft);
+    socket.on("timer-update", (timeLeft: number) => {
+      console.log("[timer-update]: ", timeLeft);
 
       setTimeLeft(timeLeft);
-    };
-
-    socket.on("timer-update", handleTimerUpdate);
+    });
 
     return () => {
-      socket.off("timer-update", handleTimerUpdate);
+      socket.off("timer-update");
     };
-  }, [socket]);
+  }, [socket, timeLeft]);
+
+  const [winners  , setWinners]     = useState<User.Player[]>([]);
+  const [showScore, setShowScore]   = useState<boolean>(false);
 
   useEffect(() => {
     if (!socket)
       return;
-    const handleTurnEnded = ({ scores, word, guessedPlayers }: { scores: ScoreBoard[], word: string, guessedPlayers: Player[] }) => {
-      setRoom((prevRoom) => prevRoom ? { ...prevRoom, scoreBoard: scores, guessedPlayers, currentWord: word } : prevRoom);
-
-      console.log("Turn ended:", word, guessedPlayers, scores);
-    };
-
-    socket.on("turn-ended", handleTurnEnded);
-
-    return () => {
-      socket.off("turn-ended", handleTurnEnded);
-    };
-  }, [socket, thisRoom]);
-
-  useEffect(() => {
-    if (!socket)
-      return;
-    const handleGameEnded = ({ winner, scores }: { winner: { id: string; score: number }, scores: { [playerId: string]: number } }) => {
-      setCanDraw(false);
-      setGameStarted(false);
+    socket.on("game-ended", (winners: User.Player[]) => {
       setShowScore(true);
+      setCanDraw(false);
+      setIsStarted(false);
 
-      setRoom((prevRoom) => prevRoom ? { ...prevRoom, scores, gameEnded: true } : prevRoom);
-
-      if (socket && !p5Instance) {
-        socket.on('send-room', (room: Room) => {
-          setRoom(room);
-
-          for (let player of room.players) {
-            if (player.id === socket.id) {
-              setMe(player);
-            }
-          }
-
-          console.log('Room:', room);
-        });
-
-        socket.emit('get-room', params.id);
-      }
-    };
-
-    socket.on("game-ended", handleGameEnded);
+      setWinners(winners);
+    });
 
     return () => {
-      socket.off("game-ended", handleGameEnded);
+      socket.off("game-ended");
     };
-  }, [socket]);
+  }, [socket, winners]);
 
   // -- Tools -- //
-  const [tool, setTool] = useState<'pencil' | 'eraser'>('pencil'); // Outil actif
-  const [strokeWidth, setStrokeWidth] = useState(4); // Épaisseur du trait
-  const [color, setColor] = useState('#000000'); // Couleur du crayon
-
   const toolRef = useRef(tool);
 
   useEffect(() => {
     toolRef.current = tool;
   }, [tool]);
+
+  const handleToolChange = ({ tool, color, size } : { tool: ToolsType, color: string, size: number }) => {
+    console.log("[handleToolChange]: ", tool, color, size);
+    setTool(tool);
+    setColor(color);
+    setStrokeWidth(size);
+  };
 
   return (
     <div className="min-h-screen w-full grid grid-cols-[auto_2fr_1fr] grid-rows-[auto_1fr_auto] gap-2">
@@ -457,125 +465,121 @@ export default function Page() {
           <Clock time={timeLeft} />
           <Audio />
         </div>
-        <WordDisplay gameState={gameState} word={thisRoom?.currentWord?.toLowerCase()} />
-        <Round currentRound={thisRoom?.currentRound} totalRounds={thisRoom?.roomSettings.rounds} />
+        <WordDisplay gameState={gameState} word={word.toLowerCase()}  />
+        <Round currentRound={currentTurn} totalRounds={room.settings.maxTurn} />
       </div>
 
       {/* Player List */}
-      {thisRoom?.roomSettings && me && socket && (
-        <UserList thisRoom={thisRoom} isClassicModeRoom={thisRoom?.roomSettings.isClassicMode} me={me} socket={socket} />
-      )}
+      <UserList room={room} />
 
       {/* Canvas Section */}
       <div className="p-4 flex flex-col items-center w-full h-full">
 
         {/* Canvas */}
         <div className="relative w-full">
-          <div ref={canvasParentRef} className="absolute w-full h-64 md:h-96 bg-white border border-gray-300 rounded-md mb-4">
-            {/* The canvas will dynamically being load here.. */}
+          <div
+            ref={canvasParentRef}
+            className="absolute w-full h-64 md:h-96 bg-white border border-gray-300 rounded-md shadow-sm"
+          >
+            {/* The canvas will dynamically load here */}
           </div>
 
-          {/* If the game is not start */}
-          {!gameStarted &&
-            <div className="absolute w-full h-64 md:h-96 bg-gray-800 bg-opacity-50 border border-gray-900 rounded-md mb-4 flex justify-center items-center z-100">
-              {/* Settings of the game */}
-            </div>
-          }
-
-          {/* If the game is started, and you can't draw */}
-          {gameStarted && !canDraw &&
-            <div className="absolute w-full h-64 md:h-96 bg-gray-800 bg-opacity-50 border border-gray-900 rounded-md mb-4 flex justify-center items-center z-100">
-              {isChoosingWord && isDrawing(me!, thisRoom?.currentDrawer!) ?
-                (
-                  <div className="flex-col justify-center items-center">
-                    <div className='text-white font-bold text-lg text-center'>
-                      Choose a word
-                    </div>
-                    <div className="w-full flex justify-center m-4">
-                      {wordList?.length > 0 && wordList?.map((word) => (
-                        <button
-                          key={word?.id} onClick={() => chooseWord(word?.text)}
-                          className="bg-white hover:bg-slate-100 text-gray-800 px-6 py-2 rounded-md text-lg mr-4"
-                        >
-                          {word?.text}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                ) : (
-                  <div className='text-white font-lg'>
-                    {thisRoom?.currentDrawer?.userName} is choosing the word!
-                  </div>
-                )
-              }
-            </div>
-          }
-
-          {/* If the game is started, and you can't draw */}
-          {!gameStarted && !canDraw && showScore &&
-            <div className="absolute w-full h-64 md:h-96 bg-gray-800 bg-opacity-50 border border-gray-900 rounded-md mb-4 flex justify-center items-center z-100">
-              <div className="flex-col justify-center items-center">
-                <div
-                  className="relative w-[124px] h-[124px] flex items-center justify-center bg-center bg-cover"
-                  style={{ backgroundImage: "url('score.gif')" }}
-                ></div>
-                <div className='text-white font-lg'>
-                  {/*winnerRef.current ? winnerRef.current.id : "No winner"} has won! With a score of {winnerRef.current?.score ?? 0} points!*/}
+          {/* Overlay if game has not started */}
+          {!isStarted && !showScore && (
+            <div className="absolute w-full h-64 md:h-96 bg-gray-800 bg-opacity-70 rounded-md flex flex-col justify-center items-center z-10">
+              {!room.isDefault && (
+                <div className="text-white font-bold text-xl text-center mb-4">
+                  Waiting for the host to start the game...
                 </div>
-              </div>
+              )}
+              {(me?.isHost || room.isDefault) && (
+                <button
+                  onClick={handleStartGame}
+                  className="bg-green-500 hover:bg-green-600 text-white px-6 py-2 rounded-md text-lg font-extrabold transition"
+                >
+                  Start!
+                </button>
+              )}
             </div>
-          }
+          )}
 
-          <div ref={hiddenCanvasRef} className="relative top-0 left-0 w-full h-64 md:h-96 bg-transparent z-[-1]" />
+          {/* Choosing word */}
+          {isStarted && !canDraw && (
+            <div className="absolute w-full h-64 md:h-96 bg-gray-800 bg-opacity-70 rounded-md flex flex-col justify-center items-center z-10">
+              {isChoosingWord && wordList?.length > 0 ? (
+                <div className="flex flex-col items-center">
+                  <div className="text-white font-bold text-lg mb-4">
+                    Choose a word
+                  </div>
+                  <div className="flex flex-wrap justify-center gap-4">
+                    {wordList.map((word, index) => (
+                      <button
+                        key={index}
+                        onClick={() => ChooseWord(word?.text)}
+                        className="bg-white hover:bg-gray-100 text-gray-800 px-6 py-2 rounded-md shadow-md text-lg font-semibold transition"
+                      >
+                        {word?.text}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : wordReveal === false ? (
+                <div className="text-white text-center font-lg">
+                  {room.settings.gameMode === Lobby.GameMode.Classic
+                    ? `${(currentDrawer as User.Player)?.profile.name} is choosing the word!`
+                    : `${(currentDrawer as User.Player[])[0]?.profile.name} is choosing the word!`}
+                </div>
+              ) : (
+                <div className="text-white text-center font-lg">
+                  The word was:{" "}
+                  <span className="font-bold text-yellow-400">{word}</span>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Game ended / Show scores */}
+          {showScore && (
+            <div className="absolute w-full h-64 md:h-96 bg-gray-800 bg-opacity-70 rounded-md flex flex-col justify-center items-center z-10">
+              <div className="w-32 h-32 bg-center bg-cover mb-4" style={{ backgroundImage: "url('score.gif')" }} />
+              {winners?.map((winner, index) => (
+                <div
+                  key={index}
+                  className="bg-white bg-opacity-90 text-black text-lg font-bold px-4 py-2 rounded-md shadow-md mb-2"
+                >
+                  {winner?.profile.name} #{index + 1} - Score {winner?.score}
+                </div>
+              ))}
+              {(me?.isHost || room.isDefault) && (
+                <button
+                  onClick={handleStartGame}
+                  className="bg-green-500 hover:bg-green-600 text-white px-6 py-2 rounded-md text-lg font-extrabold mt-4 transition"
+                >
+                  Play Again!
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* Invisible canvas for interaction */}
+          <div
+            ref={hiddenCanvasRef}
+            className="relative top-0 left-0 w-full h-64 md:h-96 bg-transparent z-[-1]"
+          />
         </div>
+
 
         {/* Tools (brush) */}
 
-        {thisRoom?.roomSettings.isClassicMode && gameStarted && canDraw && isDrawing(me!, thisRoom?.currentDrawer) && (
-          <div className="flex items-center space-x-2 md:space-x-4">
-            <button onClick={() => setTool('pencil')}>Pencil</button>
-            <button onClick={() => setTool('eraser')}>Eraser</button>
-
-            <button
-              onClick={clearCanvas}
-              className="bg-red-400 px-3 md:px-4 py-1 md:py-2 rounded-md text-white"
-            >
-              Clear
-            </button>
-          </div>
-        )}
-
-        {(!thisRoom?.roomSettings.isClassicMode && gameStarted && canDraw && thisRoom?.currentTeamDrawer?.players.find((player: Player) => player.id === me?.id)) && (
-          <div className="flex items-center space-x-2 md:space-x-4">
-            <button onClick={() => setTool('pencil')}>Pencil</button>
-            <button onClick={() => setTool('eraser')}>Eraser</button>
-
-            <button
-              onClick={clearCanvas}
-              className="bg-red-400 px-3 md:px-4 py-1 md:py-2 rounded-md text-white"
-            >
-              Clear
-            </button>
-          </div>
-        )}
-
-        {/* Bouton pour lancer la partie */}
-        {!gameStarted && meRef.current?.host === true && (
-          <div className="w-full flex justify-center m-4">
-            <button
-              onClick={() => handleStartGame()}
-              className="bg-green-500 hover:bg-green-600 text-white px-6 py-2 rounded-md text-lg font-extrabold"
-            >
-              Start!
-            </button>
-          </div>
+        {isStarted && canDraw && IsDrawing(room.settings.gameMode, GetPlayerWithId(room, socket?.id!)!, currentDrawer) && (
+          <DrawingTools onToolChange={handleToolChange} />
         )}
       </div>
 
       {/* Chat */}
       <div className="row-span-2 p-4">
         <MessagesProvider>
-          <Chat room={thisRoom} />
+          <Chat />
         </MessagesProvider>
       </div>
 

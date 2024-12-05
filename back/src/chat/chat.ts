@@ -5,6 +5,8 @@ import { Player, Room } from "../types";
 import { Server, Socket } from "socket.io";
 import { SuccessColor } from "../tools/color";
 import { SendCommandToUser } from "../tools/command";
+import { Lobby } from "../room/type";
+import { User } from "../user/type";
 
 /*
  * @brief Function to check if the message is the current word.
@@ -13,11 +15,13 @@ import { SendCommandToUser } from "../tools/command";
  * -  0: The word is close. (mean that the distance between the message and the word is less than 2)
  * -  1: The message is the word.
  */
-const _CheckMessage = (room: Room, player: Player, message: string): number => {
+const _CheckMessage = (room: Lobby.Room, player: User.Player, message: string): number => {
     if (message === room.currentWord) {
-        room.guessedPlayers.push(player);
-
-        player.hasGuessed = true;
+        if (room.settings.gameMode === Lobby.GameMode.Classic) {
+            player.hasGuessed = true;
+        } else {
+            // Every player in the team has to find the word.
+        }
 
         return 1;
     } else {
@@ -29,13 +33,13 @@ const _CheckMessage = (room: Room, player: Player, message: string): number => {
     return -1;
 }
 
-export const SecretMessage = (room: Room, message: Message): Message => {
+export const SecretMessage = (message: Message): Message => {
     message.type = MessageType.SECRET;
 
     return message;
 }
 
-export const SystemMessage = (room: Room, content: string, color: string): Message => {
+export const SystemMessage = (content: string, color: string): Message => {
     const message: Message = {
         type: MessageType.SYSTEM,
         content: content,
@@ -46,19 +50,17 @@ export const SystemMessage = (room: Room, content: string, color: string): Messa
     return message;
 }
 
-export const ReceivedMessage = (io: Server, socket: Socket, room_id: string, message: Message): { message: Message | null, room: Room | null, isClose: boolean } => {
-    const room: Room | null = rooms[room_id];
+export const ReceivedMessage = (io: Server, socket: Socket, room_id: string, message: Message): { message: Message | null, room: Lobby.Room | null, isClose: boolean } => {
+    const room: Lobby.Room | null = Lobby.AllRoom[room_id];
 
     if (!room)
         return { message: null, room: null, isClose: false };
-    const player: Player | null = GetPlayerInRoom(room, message.sender_id);
+    const player: User.Player | null = Lobby.GetPlayerInRoom(room, message.sender_id);
 
     if (!player)
         return { message: null, room: room, isClose: false };
-    console.log("[SYSTEM] Message received: " + message.content + " from " + player.userName + " in room " + room_id);
-
-    if (player.hasGuessed || (room.currentDrawer && player.id === room.currentDrawer.id)) // Check if the player already found it, or if it's the drawer.
-        return { message: SecretMessage(room, message), room: room, isClose: false };
+    if (player.hasGuessed || (room.currentDrawer && (room.settings.gameMode === Lobby.GameMode.Classic && player.profile.id === (room.currentDrawer as User.Player).profile.id) || (room.settings.gameMode === Lobby.GameMode.Team && (room.currentDrawer as User.Player[]).find((p: User.Player) => p.profile.id === player.profile.id))))
+        return { message: SecretMessage(message), room: room, isClose: false };
     let result: number = _CheckMessage(room, player, message.content);
 
     if (result === 1) {
@@ -66,7 +68,7 @@ export const ReceivedMessage = (io: Server, socket: Socket, room_id: string, mes
             word: room.currentWord as string
         });
 
-        return { message: SystemMessage(room, `${player.userName} found the word!`, SuccessColor), room: room, isClose: false };
+        return { message: SystemMessage(`${player.profile.name} found the word!`, SuccessColor), room: room, isClose: false };
     } else if (result === 0) {
         return { message: message, room: room, isClose: true };
     }
