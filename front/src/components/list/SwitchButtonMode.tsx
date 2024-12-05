@@ -4,31 +4,43 @@ import PlayerList from './PlayerList';
 import { useSocket } from '../provider/SocketProvider';
 import { Lobby } from '@/lib/room/type';
 
-const UserList = ({ room } : { room: Lobby.Room }) => {
+const UserList = ({ room, options } : { room: Lobby.Room, options?: Lobby.Settings }) => {
   const { socket } = useSocket();
 
-  const [isClassicMode, setIsClassicMode] = useState<Lobby.GameMode>(Lobby.GameMode.Classic);
+  const [isClassicMode, setIsClassicMode] = useState<Lobby.GameMode>(room.settings.gameMode);
 
   useEffect(() => {
-    setIsClassicMode(room?.settings.gameMode);
-  }, [room]);
+    if (!socket)
+      return;
+    socket.on("update-settings", (settings: Lobby.Settings) => {
+      console.log("[update-settings]: ", settings);
 
-  /*const switchTeam = () => {
-    socket?.emit('change-team-play-mode', {
-        roomId: thisRoom?.id,
+      setIsClassicMode(settings.gameMode);
     });
 
-    setIsClassicMode((prevMode) => !prevMode);
-  };
+    return () => {
+      socket.off("update-settings");
+    }
+  }, [socket, room]);
 
-  socket?.on('mode-update', ({isClassicMode}) => {
-    setIsClassicMode(isClassicMode);
-  });*/
+  useEffect(() => {
+    if (!socket)
+      return;
+    socket.on("update-gamemode", (mode: Lobby.GameMode) => {
+      console.log("[update-gamemode]: ", mode);
+
+      setIsClassicMode(mode);
+    });
+
+    return () => {
+      socket.off("update-settings");
+    }
+  }, [socket, room]);
 
   return (
     <div className="h-full flex w-full">
       {isClassicMode === Lobby.GameMode.Team ? (
-        <ListTeams />
+        <ListTeams room={room} />
       ) : (
         <PlayerList room={room} />
       )}

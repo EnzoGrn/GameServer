@@ -13,22 +13,30 @@ export namespace Lobby { // Drawing Together
     export interface Settings {
         language          : string;
         maxPlayer         : number;
+        numTeams          : number;
         gameMode          : GameMode;
         maxTurn           : number;
         useCustomWordsOnly: boolean;
-        customWords       : string[];
+        customWords      ?: string;
         drawTime          : number;
     };
 
     export const defaultSettings: Settings = Object.freeze({
         language          : "English",
         maxPlayer         : 8,
+        numTeams          : 2,
         gameMode          : GameMode.Classic,
         maxTurn           : 3,
         useCustomWordsOnly: false,
-        customWords       : [],
         drawTime          : 80
     });
+
+    export interface Team {
+        id     : number;
+        name   : string;
+        players: User.Player[];
+        score  : number;
+    };
 
     export interface State {
         isStarted     : boolean;
@@ -47,6 +55,7 @@ export namespace Lobby { // Drawing Together
     export interface Room {
         id           ?: string;
         users         : User.Player[];
+        teams        ?: Team[];
         settings      : Settings;
         isDefault     : boolean;
         currentDrawer : User.Player | User.Player[] | undefined; // Depending on the game mode

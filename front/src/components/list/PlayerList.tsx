@@ -41,10 +41,10 @@ const PlayerList = ({ room }: { room: Lobby.Room }) => {
   }, [socket, users, room]);
 
   return (
-    <div className="flex-grow flex flex-col h-full p-4 order-2 min-w-80 max-w-80">
+    <div className="flex-grow flex flex-col h-full p-4 order-2 min-w-80 max-w-80 max-h-96 overflow-y-visible z-10">
       <ul className="flex-grow overflow-visible">
         {users && users.map((player: User.Player, index: number) => (
-          <li key={index} className={`p-2 rounded-md mb-2 flex flex-row items-center border-2 border-[#c44b4a] overflow-visible ${player.hasGuessed === true ? 'bg-[#22c553]' : 'bg-[#f9f9f9]'}`}>
+          <li key={index} className={`p-2 rounded-md mb-2 flex flex-row items-center border-2 border-[#c44b4a] overflow-visible ${player.hasGuessed === true ? 'bg-[#d1ffd6]' : 'bg-[#f9f9f9]'}`}>
             <span className="font-bold mr-4">#{index + 1}</span>
             <div className="flex justify-between w-full">
               <div className="flex flex-col items-start mr-2 w-1/2 max-w-[1/2]">

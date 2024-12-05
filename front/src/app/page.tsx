@@ -88,6 +88,11 @@ export default function Home()
 
   const { socket } = useSocket();
 
+  useEffect(() => {
+    if (socket)
+      socket?.emit("leave");
+  }, [socket]);
+
   // -- Rooms management -- //
 
   const [roomCode, setRoomCode] = useState<string | null>(null);

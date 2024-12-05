@@ -89,6 +89,52 @@ export function setupSocket(io: Server) {
       }
     });
 
+    socket.on("leave", () => {
+      console.log("[leave | " + socket.id + "]");
+
+      let user: User.Player | undefined;
+
+      for (let room of Object.values(Lobby.AllRoom)) {
+        user = room.users.find((checker: User.Player) => checker.profile.id === socket.id);
+
+        // -- Remove the user from the room (delete the room if empty)
+        if (user) {
+          room.users = room.users.filter((player: User.Player) => player.profile.id !== socket.id);
+
+          io.to(room.id).emit("message-received", SystemMessage(`${user.profile.name} left the room!`, OrangeColor) as Message);
+          io.to(room.id).emit("update-users", room.users as User.Player[]);
+
+          if (room.users.length === 0)
+            delete Lobby.AllRoom[room.id];
+
+          // TODO: Remove player from the team
+
+          socket.emit("go-home");
+        }
+
+        // -- Change the host if the host left
+        if (!room.isDefault && user && user.isHost && Lobby.AllRoom[room.id]) {
+          var oldPlayer: User.Player = room.users[0];
+
+          oldPlayer.isHost = true;
+
+          io.to(room.id).emit("message-received", SystemMessage(`${oldPlayer.profile.name} is now the room owner!`, OrangeColor) as Message);
+          io.to(room.id).emit("update-users", room.users as User.Player[]);
+        }
+
+        // -- Check if there is enough player to continue the 
+        if (room.state.isStarted) {
+          if (room.settings.gameMode === Lobby.GameMode.Classic && room.users.length < 2) {
+            _EndGame(room.id);
+          } else if (room.settings.gameMode === Lobby.GameMode.Team /* && TODO: Team Counter */) {
+            _EndGame(room.id);
+          }
+
+          // TODO: Update the data of the game
+        }
+      }
+    });
+
     socket.on("start-game", (room_id: string) => {
       console.log("[start-game | " + socket.id + "]: ", room_id);
 
@@ -153,6 +199,38 @@ export function setupSocket(io: Server) {
         return;
       }
 
+      if (room.settings.gameMode === Lobby.GameMode.Team) {
+        var allTeamHavePlayer: boolean = room.teams.every((team: Lobby.Team) => team.players.length > 0);
+
+        if (!allTeamHavePlayer) {
+          io.to(room.id).emit("message-received", SystemMessage("Every team must have at least one player to start the game!", ErrorColor) as Message);
+
+          return;
+        }
+
+        var numberOfPlayerInTeam: number = 0;
+
+        room.teams.forEach((team: Lobby.Team) => {
+          numberOfPlayerInTeam += team.players.length;
+        });
+
+        if (numberOfPlayerInTeam !== room.users.length) {
+          io.to(room.id).emit("message-received", SystemMessage("Every player must be in a team to start the game!", ErrorColor) as Message);
+
+          return;
+        }
+
+        room.teams.forEach((team: Lobby.Team) => {
+          team.players.forEach((player: User.Player) => {
+            player.hasGuessed = false;
+            player.score = 0;
+          });
+          team.score = 0;
+        });
+
+        io.to(room_id).emit("update-teams", room.teams as Lobby.Team[]);
+      }
+
       room.users.forEach((player: User.Player) => {
         // -- Reset the score of the player
         player.hasGuessed = false;
@@ -160,8 +238,6 @@ export function setupSocket(io: Server) {
       });
 
       io.to(room.id).emit("update-users", room.users as User.Player[]);
-
-      // TODO: Check if every team has at least one player (if team mode)
 
       room.state.showScore = false;
       room.state.isStarted = true;
@@ -360,116 +436,216 @@ export function setupSocket(io: Server) {
       io.to(room_id).emit("update-state", room.state as Lobby.State);
     }
 
+    socket.on("update-gamemode", (data: any) => {
+      const { room_id, mode } : { room_id: string, mode: Lobby.GameMode } = data;
 
+      console.log("[update-gamemode | " + socket.id + "]: ", room_id, mode);
 
+      if (!room_id || mode === undefined)
+        return;
+      var room: Lobby.Room | undefined = Lobby.AllRoom[room_id];
 
+      if (!room)
+        return;
+      room.settings.gameMode = mode;
 
+      io.to(room_id).emit("update-settings", room.settings as Lobby.Settings);
+      io.to(room_id).emit("update-gamemode", mode as Lobby.GameMode);
 
+      if (mode === Lobby.GameMode.Team) {
+        var teamNumber: number = room.settings.numTeams;
 
+        room.teams = [] as Lobby.Team[];
 
+        while (room.teams.length < teamNumber) {
+          room.teams.push({
+            id: room.teams.length + 1 as number,
+            name: `Team ${room.teams.length + 1}`,
+            players: [] as User.Player[],
+            score: 0
+          });
+        }
 
+        room.users.forEach((player: User.Player, index: number) => {
+          room.teams[index % teamNumber].players.push(player);
+        });
 
-
-
-
-
-
-
-
-
-    socket.on("set-custom-words-only", ({ roomCode, boolean }) => {
-      rooms[roomCode].roomSettings.useCustomWords = boolean;
-      io.to(roomCode).emit("room-data-updated", { room: rooms[roomCode] });
-    });
-
-    socket.on("set-number-rounds", ({ setting, roomCode }) => {
-      rooms[roomCode].roomSettings.rounds = setting;
-      io.to(roomCode).emit("room-data-updated", { room: rooms[roomCode] });
-    });
-
-    socket.on("set-draw-timer", ({ setting, roomCode }) => {
-      rooms[roomCode].roomSettings.drawTime = setting;
-      io.to(roomCode).emit("room-data-updated", { room: rooms[roomCode] });
-    });
-
-    socket.on("set-players-number", ({ setting, roomCode }) => {
-      rooms[roomCode].roomSettings.players = setting;
-      io.to(roomCode).emit("room-data-updated", { room: rooms[roomCode] });
-    });
-
-    socket.on("set-hints-number", ({ setting, roomCode }) => {
-      rooms[roomCode].roomSettings.hints = setting;
-      io.to(roomCode).emit("room-data-updated", { room: rooms[roomCode] });
-    });
-
-    socket.on("set-word-count", ({ setting, roomCode }) => {
-      rooms[roomCode].roomSettings.wordCount = setting;
-      io.to(roomCode).emit("room-data-updated", { room: rooms[roomCode] });
-    });
-
-    /////////////////////////////////////////////////////////// TEAM MANAGEMENT ///////////////////////////////////////////////////////////
-
-    socket.on("change-team-play-mode", ({ roomId }) => {
-      const room = rooms[roomId];
-
-      console.log("Trying Changing team play mode...");
-
-      if (!room || room.gameStarted) return;
-
-      console.log("Changing team play mode...");
-
-      changeTeamPlayMode(room);
-      io.to(roomId).emit("mode-update", { isClassicMode: room.roomSettings.isClassicMode });
-      io.to(roomId).emit("room-data-updated", { room: rooms[roomId] });
-    });
-
-    socket.on("add-player-to-a-team", ({ roomId, playerId }) => {
-        const room = rooms[roomId];
-
-        if (!room || room.roomSettings.isClassicMode || room.gameStarted) return;
-
-        const player = room.players.find((player) => player.id === playerId);
-        const team = room.teams.reduce((prev, current) => (prev.players.length < current.players.length ? prev : current));
+        io.to(room_id).emit("update-teams", room.teams as Lobby.Team[]);
+      } else {
+        room.teams = [] as Lobby.Team[];
         
-        if (!player || !team) return;
-
-        addPlayerToTeam(room, player, team);
-      io.to(roomId).emit("room-data-updated", { room: rooms[roomId] });
+        io.to(room_id).emit("update-teams", room.teams as Lobby.Team[]);
+        io.to(room.id).emit("update-users", room.users as User.Player[]);
+      }
     });
 
-    socket.on("remove-player-from-team", ({ roomId, playerId }) => {
-        const room = rooms[roomId];
+    socket.on("update-number-teams", (data: any) => {
+      const { room_id, numTeams } : { room_id: string, numTeams: number } = data;
 
-        if (!room || room.roomSettings.isClassicMode || room.gameStarted) return;
+      console.log("[update-number-teams | " + socket.id + "]: ", room_id, numTeams);
 
-        const player = room.players.find((player) => player.id === playerId);
-        
-        if (!player) return;
+      if (!room_id || numTeams === undefined)
+        return;
+      var room: Lobby.Room | undefined = Lobby.AllRoom[room_id];
 
-        removePlayerFromTeam(room, player);
-      io.to(roomId).emit("room-data-updated", { room: rooms[roomId] });
+      if (!room)
+        return;
+      var oldTeamsNumber: number = room.settings.numTeams;
+
+      room.settings.numTeams = numTeams;
+
+      if (oldTeamsNumber > numTeams) {
+        room.teams = room.teams.slice(0, numTeams);
+
+        io.to(room_id).emit("update-teams", room.teams as Lobby.Team[]);
+      } else {
+        while (room.teams.length < numTeams) {
+          room.teams.push({
+            id: room.teams.length + 1 as number,
+            name: `Team ${room.teams.length + 1}`,
+            players: [] as User.Player[],
+            score: 0
+          });
+        }
+
+        io.to(room_id).emit("update-teams", room.teams as Lobby.Team[]);
+      }
+
+      io.to(room_id).emit("update-settings", room.settings as Lobby.Settings);
     });
 
-    socket.on("switch-player-team", ({ roomId, playerId }) => {
-        const room = rooms[roomId];
-        
-        if (!room || room.roomSettings.isClassicMode || room.gameStarted) return;
+    socket.on("join-team", (data: any) => {
+      const { room_id, team_id } : { room_id: string, team_id: number } = data;
 
-        console.log("Switching player team...");
+      console.log("[join-team | " + socket.id + "]: ", room_id, team_id);
 
-        const player = room.players.find((player) => player.id === playerId);
+      if (!room_id || team_id === undefined)
+        return;
+      var room: Lobby.Room | undefined = Lobby.AllRoom[room_id];
 
-        console.log("Player found:", player);
+      if (!room)
+        return;
+      var team: Lobby.Team | undefined = room.teams.find((checker: Lobby.Team) => checker.id === team_id);
 
-        if (!player) return;
+      if (!team)
+        return;
+      var player: User.Player | undefined = room.users.find((checker: User.Player) => checker.profile.id === socket.id);
 
-        console.log("Player found:", player);
+      if (!player)
+        return;
+      room.teams.forEach((team: Lobby.Team) => {
+        team.players = team.players.filter((checker: User.Player) => checker.profile.id !== socket.id);
+      });
 
-        const oldTeamId = player.teamId;
-        removePlayerFromTeam(room, player);
-        const team = room.teams.find((team) => team.id !== oldTeamId);
-        addPlayerToTeam(room, player, team);
-        io.to(roomId).emit("room-data-updated", { room: rooms[roomId] });
+      team.players.push(player);
+
+      io.to(room_id).emit("update-teams", room.teams as Lobby.Team[]);
+    });
+
+    socket.on("update-max-players", (data: any) => {
+      const { room_id, maxPlayer } : { room_id: string, maxPlayer: number } = data;
+
+      console.log("[update-max-players | " + socket.id + "]: ", room_id, maxPlayer);
+
+      if (!room_id || maxPlayer === undefined)
+        return;
+      var room: Lobby.Room | undefined = Lobby.AllRoom[room_id];
+
+      if (!room)
+        return;
+      room.settings.maxPlayer = maxPlayer;
+
+      if (maxPlayer < room.users.length)
+        room.settings.maxPlayer = room.users.length;
+      io.to(room_id).emit("update-settings", room.settings as Lobby.Settings);
+    });
+
+    socket.on("update-draw-time", (data: any) => {
+      const { room_id, time } : { room_id: string, time: number } = data;
+
+      console.log("[update-draw-time | " + socket.id + "]: ", room_id, time);
+
+      if (!room_id || time === undefined)
+        return;
+      var room: Lobby.Room | undefined = Lobby.AllRoom[room_id];
+
+      if (!room)
+        return;
+      room.settings.drawTime = time;
+
+      io.to(room_id).emit("update-settings", room.settings as Lobby.Settings);
+    });
+
+    socket.on("update-max-rounds", (data: any) => {
+      const { room_id, rounds } : { room_id: string, rounds: number } = data;
+
+      console.log("[update-max-rounds | " + socket.id + "]: ", room_id, rounds);
+
+      if (!room_id || rounds === undefined)
+        return;
+      var room: Lobby.Room | undefined = Lobby.AllRoom[room_id];
+
+      if (!room)
+        return;
+      room.settings.maxTurn = rounds;
+
+      io.to(room_id).emit("update-settings", room.settings as Lobby.Settings);
+    });
+
+    socket.on("update-language", (data: any) => {
+      const { room_id, language } : { room_id: string, language: string } = data;
+
+      console.log("[update-language | " + socket.id + "]: ", room_id, language);
+
+      if (!room_id || !language)
+        return;
+      var room: Lobby.Room | undefined = Lobby.AllRoom[room_id];
+
+      if (!room)
+        return;
+      room.settings.language = language;
+
+      io.to(room_id).emit("update-settings", room.settings as Lobby.Settings);
+    });
+
+    socket.on("update-custom-words-only", (data: any) => {
+      const { room_id, useCustomWordsOnly } : { room_id: string, useCustomWordsOnly: boolean } = data;
+
+      console.log("[update-custom-words-only | " + socket.id + "]: ", room_id, useCustomWordsOnly);
+
+      if (!room_id || useCustomWordsOnly === undefined)
+        return;
+      var room: Lobby.Room | undefined = Lobby.AllRoom[room_id];
+
+      if (!room)
+        return;
+      room.settings.useCustomWordsOnly = useCustomWordsOnly;
+
+      var numberCustomWords: number = room.settings.customWords?.split(';').length || 0;
+
+      if (useCustomWordsOnly && numberCustomWords < 3) {
+        io.to(room_id).emit("message-received", SystemMessage("You need at least 3 custom words to use this option!", WarningColor) as Message);
+
+        room.settings.useCustomWordsOnly = false;
+      }
+
+      io.to(room_id).emit("update-settings", room.settings as Lobby.Settings);
+    });
+
+    socket.on("update-custom-words", (data: any) => {
+      const { room_id, customWords } : { room_id: string, customWords: string } = data;
+
+      console.log("[update-custom-words | " + socket.id + "]: ", room_id, customWords);
+
+      if (!room_id || !customWords)
+        return;
+      var room: Lobby.Room | undefined = Lobby.AllRoom[room_id];
+
+      if (!room)
+        return;
+      room.settings.customWords = customWords;
+
+      io.to(room_id).emit("update-settings", room.settings as Lobby.Settings);
     });
   });
 }

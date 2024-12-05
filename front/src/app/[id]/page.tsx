@@ -184,6 +184,41 @@ export default function Page()
     }
   }, [socket, room]);
 
+  const [settings, setSettings] = useState<Lobby.Settings>(room.settings);
+  const settingRef = useRef(settings);
+
+  useEffect(() => {
+    if (!socket)
+      return;
+    socket.on("update-settings", (settings: Lobby.Settings) => {
+      console.log("[update-settings]: ", settings);
+
+      setRoom({ ...room, settings });
+      setSettings(settings);
+    });
+
+    return () => {
+      socket.off("update-settings");
+    }
+  }, [socket, room, settings]);
+
+  const [teams, setTeams] = useState<Lobby.Team[]>([]);
+
+  useEffect(() => {
+    if (!socket)
+      return;
+    socket.on("update-teams", (teams: Lobby.Team[]) => {
+      console.log("[update-teams]: ", teams);
+
+      setRoom({ ...room, teams });
+      setTeams(teams);
+    });
+
+    return () => {
+      socket.off("update-teams");
+    }
+  }, [socket, room]);
+
   const [currentDrawer, setCurrentDrawer] = useState<User.Player | User.Player[] | undefined>(undefined);
 
   // -- Canvas -- //
@@ -455,6 +490,97 @@ export default function Page()
     setStrokeWidth(size);
   };
 
+  // -- Settings -- //
+  useEffect(() => {
+    settingRef.current = settings;
+  }, [settings]);
+
+  useEffect(() => {
+    setRoom({ ...room, settings });
+  }, [settings]);
+
+  const handleMaxPlayersChange = (value: number) => {
+    setRoom({ ...room, settings: { ...room.settings, maxPlayer: value } });
+    setSettings({ ...settings, maxPlayer: value });
+
+    socket?.emit("update-max-players", {
+      room_id: room.id as string,
+      maxPlayer: value as number
+    });
+  };
+
+  const handleMaxTeamsChange = (value: number) => {
+    setRoom({ ...room, settings: { ...room.settings, numTeams: value } });
+    setSettings({ ...settings, numTeams: value });
+
+    socket?.emit("update-number-teams", {
+      room_id: room.id as string,
+      numTeams: value as number
+    });
+  };
+
+  const handleMaxTimeDrawingChange = (value: number) => {
+    setRoom({ ...room, settings: { ...room.settings, drawTime: value } });
+    setSettings({ ...settings, drawTime: value });
+
+    socket?.emit("update-draw-time", {
+      room_id: room.id as string,
+      time: value as number
+    });
+  };
+
+  const handleMaxRoundsChange = (value: number) => {
+    setRoom({ ...room, settings: { ...room.settings, maxTurn: value } });
+    setSettings({ ...settings, maxTurn: value });
+
+    socket?.emit("update-max-rounds", {
+      room_id: room.id as string,
+      rounds: value as number
+    });
+  };
+
+  const handleLanguageChange = (value: string) => {
+    setRoom({ ...room, settings: { ...room.settings, language: value } });
+    setSettings({ ...settings, language: value });
+
+    socket?.emit("update-language", {
+      room_id: room.id as string,
+      roomLanguage: value as string
+    });
+  };
+
+  const handleGameModeChange = (value: string) => {
+    var gameMode: Lobby.GameMode = value === "Classic" ? Lobby.GameMode.Classic : Lobby.GameMode.Team;
+
+    setRoom({ ...room, settings: { ...room.settings, gameMode } });
+    setSettings({ ...settings, gameMode: gameMode });
+
+    socket?.emit("update-gamemode", {
+      room_id: room.id as string,
+      mode: gameMode as Lobby.GameMode
+    });
+  };
+
+  const handleCustomWordsOnlyChange = (value: boolean) => {
+    setRoom({ ...room, settings: { ...room.settings, useCustomWordsOnly: value } });
+    setSettings({ ...settings, useCustomWordsOnly: value });
+
+    socket?.emit("update-custom-words-only", {
+      room_id: room.id as string,
+      useCustomWordsOnly: value as boolean
+    });
+  };
+
+  const handleCustomWordsChange = (value: string) => {
+    setRoom({ ...room, settings: { ...room.settings, customWords: value } });
+    setSettings({ ...settings, customWords: value });
+
+    socket?.emit("update-custom-words", {
+      room_id: room.id as string,
+      customWords: value as string
+    });
+  };
+
   return (
     <div className="min-h-screen w-full grid grid-cols-[auto_2fr_1fr] grid-rows-[auto_1fr_auto] gap-2">
 
@@ -466,7 +592,7 @@ export default function Page()
       </div>
 
       {/* Player List */}
-      <UserList room={room} />
+      <UserList room={room} options={settings} />
 
       {/* Canvas Section */}
       <div className="p-4 flex flex-col items-center w-full h-full">
@@ -483,10 +609,143 @@ export default function Page()
           {/* Overlay if game has not started */}
           {!isStarted && !showScore && (
             <div className="absolute w-full h-64 md:h-96 bg-gray-800 bg-opacity-70 rounded-md flex flex-col justify-center items-center z-10">
-              {!room.isDefault && (
-                <div className="text-white font-bold text-xl text-center mb-4">
-                  Waiting for the host to start the game...
+              {!room.isDefault && me?.isHost && (
+                <div className="w-full h-auto max-h-full rounded-md overflow-y-auto p-4">
+                <div className="flex flex-row w-full justify-between gap-4">
+                  {/* Mode de jeu */}
+                  <div className="flex flex-col space-y-2 w-full">
+                    <label htmlFor="gameMode" className="text-[#f9f9f9] font-semibold">
+                      Game Mode
+                    </label>
+                    <select
+                      id="gameMode"
+                      className="p-2 border rounded-md shadow-sm"
+                      value={settingRef.current.gameMode === Lobby.GameMode.Classic ? "Classic" : "Team"}
+                      onChange={(e) => handleGameModeChange(e.target.value)}
+                    >
+                      <option value="Classic">Classic</option>
+                      <option value="Team">Team</option>
+                    </select>
+                  </div>
+              
+                  {/* Langue */}
+                  <div className="flex flex-col space-y-2 w-full">
+                    <label htmlFor="language" className="text-[#f9f9f9] font-semibold">
+                      Language
+                    </label>
+                    <select
+                      id="language"
+                      className="p-2 border rounded-md shadow-sm"
+                      value={settings.language}
+                      onChange={(e) => handleLanguageChange(e.target.value)}
+                    >
+                      <option value="English">English</option>
+                      <option value="French">French</option>
+                    </select>
+                  </div>
                 </div>
+              
+                <div className="flex flex-row w-full justify-between gap-4">
+                  {/* Nombre max de joueurs */}
+                  <div className="flex flex-col space-y-2 w-full">
+                    <label htmlFor="maxPlayers" className="text-[#f9f9f9] font-semibold">
+                      Max Players
+                    </label>
+                    <input
+                      id="maxPlayers"
+                      type="number"
+                      className="p-2 border rounded-md shadow-sm"
+                      value={settings.maxPlayer}
+                      min={2}
+                      max={16}
+                      onChange={(e) => handleMaxPlayersChange(Number(e.target.value))}
+                    />
+                  </div>
+              
+                  {/* Nombre d'équipes */}
+                  {settings.gameMode === Lobby.GameMode.Team && (
+                    <div className="flex flex-col space-y-2 w-full">
+                      <label htmlFor="teams" className="text-[#f9f9f9] font-semibold">
+                        Number of Teams
+                      </label>
+                      <input
+                        id="teams"
+                        type="number"
+                        className="p-2 border rounded-md shadow-sm"
+                        value={settings.numTeams}
+                        min={2}
+                        max={4}
+                        onChange={(e) => handleMaxTeamsChange(Number(e.target.value))}
+                      />
+                    </div>
+                  )}
+                </div>
+              
+                <div className="flex flex-row w-full justify-between gap-4">
+                  {/* Temps par dessin */}
+                  <div className="flex flex-col space-y-2 w-full">
+                    <label htmlFor="drawTime" className="text-[#f9f9f9] font-semibold">
+                      Time Per Drawing (seconds)
+                    </label>
+                    <input
+                      id="drawTime"
+                      type="number"
+                      className="p-2 border rounded-md shadow-sm"
+                      value={settings.drawTime}
+                      min={10}
+                      max={300}
+                      onChange={(e) => handleMaxTimeDrawingChange(Number(e.target.value))}
+                    />
+                  </div>
+              
+                  {/* Nombre de rounds */}
+                  <div className="flex flex-col space-y-2 w-full">
+                    <label htmlFor="rounds" className="text-[#f9f9f9] font-semibold">
+                      Number of Rounds
+                    </label>
+                    <input
+                      id="rounds"
+                      type="number"
+                      className="p-2 border rounded-md shadow-sm"
+                      value={settings.maxTurn}
+                      min={1}
+                      max={20}
+                      onChange={(e) => handleMaxRoundsChange(Number(e.target.value))}
+                    />
+                  </div>
+                </div>
+              
+                <div className="flex flex-row w-full justify-between gap-4">
+                  {/* Utiliser uniquement les mots personnalisés */}
+                  <div className="flex items-center space-x-2 w-full">
+                    <input
+                      id="customWordsOnly"
+                      type="checkbox"
+                      className="h-5 w-5 text-[#f9f9f9] rounded"
+                      checked={settings.useCustomWordsOnly}
+                      onChange={(e) => handleCustomWordsOnlyChange(e.target.checked)}
+                    />
+                    <label htmlFor="customWordsOnly" className="text-[#f9f9f9] font-semibold">
+                      Use Custom Words Only
+                    </label>
+                  </div>
+                </div>
+              
+                {/* Mots personnalisés */}
+                <div className="flex flex-col space-y-2">
+                  <label htmlFor="customWords" className="text-[#f9f9f9] font-semibold w-full">
+                    Custom Words (separated by <code>;</code>)
+                  </label>
+                  <textarea
+                    id="customWords"
+                    className="p-2 border rounded-md shadow-sm"
+                    value={settings.customWords}
+                    onChange={(e) => handleCustomWordsChange(e.target.value)}
+                    placeholder="e.g., apple;dog;sun"
+                    rows={3}
+                  />
+                </div>
+              </div>
               )}
               {(me?.isHost || room.isDefault) && (
                 <button
@@ -564,9 +823,7 @@ export default function Page()
           />
         </div>
 
-
         {/* Tools (brush) */}
-
         {isStarted && canDraw && IsDrawing(room.settings.gameMode, GetPlayerWithId(room, socket?.id!)!, currentDrawer) && (
           <DrawingTools onToolChange={handleToolChange} />
         )}
