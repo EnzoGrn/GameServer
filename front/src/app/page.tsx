@@ -14,7 +14,6 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useRoom } from '@/lib/room/RoomProvider';
 
 // -- Types -- //
-import { Room } from '@/lib/type/types';
 import { User } from '@/lib/player/type';
 import { Lobby } from '@/lib/room/type';
 import { createRoom, joinRoom } from '@/lib/room/function';
@@ -57,6 +56,19 @@ export default function Home()
     setProfile({ ...profile, language: language });
   }
 
+  const OnAvatarChange = (plus: boolean) => {
+    let avatar: number = profile.avatar;
+
+    if (plus)
+      avatar = (avatar + 1) % 5;
+    else
+      avatar = (avatar - 1 + 5) % 5;
+
+    localStorage.setItem("avatar", avatar.toString());
+
+    setProfile({ ...profile, avatar: avatar });
+  }
+
   // -- On load -- //
 
   /*
@@ -67,35 +79,17 @@ export default function Home()
   useEffect(() => {
     let name: string = localStorage.getItem("player") || "";
     let language: string = localStorage.getItem("language") || "English";
+    let avatar: number = parseInt(localStorage.getItem("avatar") || "0");
 
-    setProfile({ ...profile, name: name, language: language });
+    setProfile({ ...profile, name: name, language: language, avatar: avatar });
   }, []);
 
   // -- Socket -- //
 
   const { socket } = useSocket();
 
-  useEffect(() => {
-    if (socket) {
-      console.log("Socket is connected");
-
-      socket.on("send-all-rooms", (rooms: { [key: string]: Room }) => {
-        setAvailableRooms(rooms);
-
-        console.log(rooms);
-      });
-
-      socket.emit("get-all-rooms");
-    }
-
-    return () => {
-      socket?.off("send-all-rooms"); // Remove the listener
-    };
-  }, [socket]);
-
   // -- Rooms management -- //
 
-  const [availableRooms, setAvailableRooms] = useState<{ [key: string]: Room }>({}); // List of all available rooms never displayed
   const [roomCode, setRoomCode] = useState<string | null>(null);
 
   useEffect(() => {
@@ -143,13 +137,12 @@ export default function Home()
     };
   }, [socket]);
 
-  // -- Render -- //
-
   // -- Player character Management -- //
   const playerIconsLength = useMemo(() => {
     return 5;
   }, []);
 
+  // -- Render -- //
   return (
     <div className="flex flex-col items-center justify-center min-h-screen px-4 py-8">
 
@@ -209,13 +202,13 @@ export default function Home()
             <MdArrowBackIos
               className="cursor-pointer"
               size={50}
-              onClick={() => setProfile({ ...profile, avatar: (profile.avatar - 1 + playerIconsLength) % playerIconsLength })}
+              onClick={() => OnAvatarChange(false)}
             />
             <Image className="select-none" src={`/player-icons/bear/${profile.avatar}.png`} alt="Player Character" width={100} height={100} />
             <MdArrowBackIos
               size={50}
               className="rotate-180 cursor-pointer"
-              onClick={() => setProfile({ ...profile, avatar: (profile.avatar + 1) % playerIconsLength })}
+              onClick={() => OnAvatarChange(true)}
             />
           </div>
         </div>
