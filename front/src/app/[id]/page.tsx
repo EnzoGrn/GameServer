@@ -5,6 +5,7 @@ import Clock from '@/components/element/Clock';
 import WordDisplay, { GameState } from '@/components/element/WordDisplay';
 import Round from '@/components/element/Round';
 import InvitationBox from '@/components/invitation/Invitation';
+import Audio from '@/components/element/Audio';
 
 // -- Librairies -- //
 import { useEffect, useRef, useState } from 'react';
@@ -306,7 +307,7 @@ export default function Page()
         if ((drawers as User.Player | undefined)?.profile.id !== socket.id)
           return;
       }
-      
+
       const currentTool = toolRef.current;
       const currentColor = colorRef.current;
       const currentStrokeWidth  = strokeWidthRef.current;
@@ -599,7 +600,10 @@ export default function Page()
 
       {/* Header */}
       <div className="col-span-3 w-full bg-[#f37b78] text-white p-4 flex justify-between items-center border-b-2 border-b-[#c44b4a]">
-        <Clock time={timeLeft} />
+        <div className="flex flex-row w-auto gap-5 align-center justify-around">
+          <Clock time={timeLeft} />
+          <Audio />
+        </div>
         <WordDisplay gameState={gameState} word={word.toLowerCase()}  />
         <Round currentRound={currentTurn} totalRounds={settings.maxTurn} />
       </div>

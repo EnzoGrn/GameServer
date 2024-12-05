@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { SendMessage } from "@/lib/chat/message";
 import { Lobby } from "@/lib/room/type";
 import MessageView from "./Message";
+import { useAudio } from "@/lib/audio/audioProvider";
 import { User } from "@/lib/player/type";
 import { GetPlayerWithId } from "@/lib/room/function";
 import { useRoom } from "@/lib/room/RoomProvider";
@@ -17,6 +18,16 @@ const Chat = () => {
   const messagesEndRef = useRef<HTMLDivElement>(null); // Ref to the last message displayed in the chat.
 
   const [message , setMessage] = useState<string>('');     // The current message typed by the user, to send.
+
+  // -- Audio -- //
+  const [messageReceivedAudio, setMessageReceivedAudio] = useState<HTMLAudioElement | null>(null);
+  const [foundWordAudio, setFoundWordAudio] = useState<HTMLAudioElement | null>(null);
+  const {playAudio} = useAudio();
+
+  useEffect(() => {
+    setMessageReceivedAudio(new Audio('/sounds/player-joined.mp3'));
+    setFoundWordAudio(new Audio('/sounds/found-word.mp3'));
+  }, []);
 
   useEffect(() => {
     if (!socket)
@@ -40,9 +51,22 @@ const Chat = () => {
     if (!room)
       return;
     try {
-      if (message.type !== MessageType.SECRET)
+      if (message.type !== MessageType.SECRET) {
+        setMessageReceivedAudio((prev) => {
+          if (prev && message.content.includes("joined the room")) {
+            playAudio(prev);
+          }
+          return prev;
+        });
+        setFoundWordAudio((prev) => {
+          if (prev && message.content.includes("found the word")) {
+            playAudio(prev);
+          }
+          return prev;
+        });
+
         newMessage(message);
-      else if (!Array.isArray(room.currentDrawer)) {
+      } else if (!Array.isArray(room.currentDrawer)) {
         const user: User.Player | undefined = room.currentDrawer as User.Player | undefined;
 
         if (user?.profile?.id === socket?.id || GetPlayerWithId(room, socket!.id!)?.hasGuessed === true || message.sender_id === socket?.id)

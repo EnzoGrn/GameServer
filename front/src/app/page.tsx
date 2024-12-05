@@ -19,9 +19,9 @@ import { Lobby } from '@/lib/room/type';
 import { createRoom, joinRoom } from '@/lib/room/function';
 import { useSafeEffect } from '@/lib/react/useSafeEffect';
 import Image from "next/image";
+import { useAudio } from "@/lib/audio/audioProvider";
 
-export default function Home()
-{
+export default function Home() {
   // -- Navigation -- //
 
   const router = useRouter();
@@ -36,7 +36,7 @@ export default function Home()
   }, []);
 
   // -- Default inputs fields values -- //
-    // -- Variables -- //
+  // -- Variables -- //
   const [profile, setProfile] = useState<User.Profile>({ id: "", name: "", language: "English", avatar: 0 });
 
   // -- Functions -- //
@@ -57,6 +57,8 @@ export default function Home()
   }
 
   const OnAvatarChange = (plus: boolean) => {
+    if (buttonClickAudio) playAudio(buttonClickAudio);
+
     let avatar: number = profile.avatar;
 
     if (plus)
@@ -92,6 +94,15 @@ export default function Home()
     if (socket)
       socket?.emit("leave");
   }, [socket]);
+
+  // -- Sound Management -- //
+  const { playAudio } = useAudio();
+  const [buttonClickAudio, setButtonClickAudio] = useState<HTMLAudioElement | null>(null);
+
+  useEffect(() => {
+    const audio = new Audio("/sounds/button-click.mp3");
+    setButtonClickAudio(audio);
+  }, []);
 
   // -- Rooms management -- //
 
@@ -144,7 +155,7 @@ export default function Home()
 
   // -- Player character Management -- //
   const playerIconsLength = useMemo(() => {
-    return 5;
+    return 5; // Number of player icon files in the bear folder
   }, []);
 
   // -- Render -- //
@@ -158,52 +169,52 @@ export default function Home()
       <main className='flex flex-row justify-between items-center gap-2'>
         <div className="w-full max-w-md p-6 bg-white rounded-lg shadow-lg space-y-6">
 
-        {/* Label Section */}
-        <div className="w-full flex flex-row justify-between items-center gap-2">
-          <LabelBlock blockName="Player Name">
-            <input
-              type="text"
-              value={profile.name}
-              onChange={(e) => OnPlayerNameChange(e.target.value)}
-              placeholder="Enter your name"
-              maxLength={15}
-              className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#f37b78] focus:outline-none"
-            />
-          </LabelBlock>
+          {/* Label Section */}
+          <div className="w-full flex flex-row justify-between items-center gap-2">
+            <LabelBlock blockName="Player Name">
+              <input
+                type="text"
+                value={profile.name}
+                onChange={(e) => OnPlayerNameChange(e.target.value)}
+                placeholder="Enter your name"
+                maxLength={15}
+                className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#f37b78] focus:outline-none"
+              />
+            </LabelBlock>
 
-          <LabelBlock blockName="Language">
-            <select
-              value={profile.language}
-              onChange={(e) => OnLanguageChange(e.target.value)}
-              className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#f37b78] focus:outline-none"
+            <LabelBlock blockName="Language">
+              <select
+                value={profile.language}
+                onChange={(e) => OnLanguageChange(e.target.value)}
+                className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#f37b78] focus:outline-none"
+              >
+                <option value="English">English</option>
+                <option value="French">French</option>
+                {/* -- Add more option */}
+              </select>
+            </LabelBlock>
+          </div>
+
+          <div className="space-y-2">
+            <button
+              onClick={() => joinRoom(socket!, profile, roomCode || undefined)}
+              className="w-full bg-green-500 hover:bg-green-600 text-white py-3 text-xl font-bold rounded-md transition-all"
             >
-              <option value="English">English</option>
-              <option value="French">French</option>
-              {/* -- Add more option */}
-            </select>
-          </LabelBlock>
-        </div>
+              Play!
+            </button>
 
-        <div className="space-y-2">
-          <button
-            onClick={() => joinRoom(socket!, profile, roomCode || undefined)}
-            className="w-full bg-green-500 hover:bg-green-600 text-white py-3 text-xl font-bold rounded-md transition-all"
-          >
-            Play!
-          </button>
+            <button
+              onClick={() => createRoom(socket!, profile)}
+              className="w-full bg-blue-500 hover:bg-blue-600 text-white py-2 rounded-md font-medium transition-all"
+            >
+              Create Private Room
+            </button>
+          </div>
 
-          <button
-            onClick={() => createRoom(socket!, profile)}
-            className="w-full bg-blue-500 hover:bg-blue-600 text-white py-2 rounded-md font-medium transition-all"
-          >
-            Create Private Room
-          </button>
-        </div>
-
-        {/* Choose Character Section */}
-        <div className='w-full h-full max-w-md p-6 bg-white rounded-lg shadow-lg space-y-6'>
-          <p className='text-xl font-bold'>Choose your character !</p>
-          <div className='flex flex-row justify-around items-center h-full'>
+          {/* Choose Character Section */}
+          <div className='w-full h-full max-w-md p-6 bg-white rounded-lg shadow-lg space-y-6'>
+            <p className='text-xl font-bold'>Choose your character !</p>
+            <div className='flex flex-row justify-around items-center h-full'>
             <MdArrowBackIos
               className="cursor-pointer"
               size={50}
@@ -215,10 +226,10 @@ export default function Home()
               className="rotate-180 cursor-pointer"
               onClick={() => OnAvatarChange(true)}
             />
-          </div>
-        </div>
-        </div>
-      </main>
-    </div>
+          </div >
+        </div >
+        </div >
+      </main >
+    </div >
   );
 }
