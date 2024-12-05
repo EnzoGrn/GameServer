@@ -7,6 +7,7 @@ import { GetPlayerById } from "@/lib/player/getter";
 import { Player, Room } from "@/lib/type/types";
 import { Socket } from 'socket.io-client';
 import MessageView from "./Message";
+import { useAudio } from "@/lib/audio/audioProvider";
 
 interface ChatProps {
   room : Room | null;
@@ -19,6 +20,16 @@ const Chat: React.FC<ChatProps> = ({ room }) => {
   const messagesEndRef = useRef<HTMLDivElement>(null); // Ref to the last message displayed in the chat.
 
   const [message , setMessage] = useState<string>('');     // The current message typed by the user, to send.
+
+  // -- Audio -- //
+  const [messageReceivedAudio, setMessageReceivedAudio] = useState<HTMLAudioElement | null>(null);
+  const [foundWordAudio, setFoundWordAudio] = useState<HTMLAudioElement | null>(null);
+  const {playAudio} = useAudio();
+
+  useEffect(() => {
+    setMessageReceivedAudio(new Audio('/sounds/player-joined.mp3'));
+    setFoundWordAudio(new Audio('/sounds/found-word.mp3'));
+  }, []);
 
   useEffect(() => {
     if (!socket)
@@ -45,9 +56,13 @@ const Chat: React.FC<ChatProps> = ({ room }) => {
     if (!room)
       return;
     try {
-      if (message.type !== MessageType.SECRET)
+      if (message.type !== MessageType.SECRET) {
         newMessage(message);
-      else if (room.currentDrawer?.id === socket?.id || GetPlayerById(room, socket!.id!)?.hasGuessed === true || message.sender_id === socket?.id)
+        if (messageReceivedAudio && message.content.includes("joined the room"))
+          playAudio(messageReceivedAudio);
+        if (foundWordAudio && message.content.includes("found the word"))
+          playAudio(foundWordAudio);
+      } else if (room.currentDrawer?.id === socket?.id || GetPlayerById(room, socket!.id!)?.hasGuessed === true || message.sender_id === socket?.id)
         newMessage(message);
     } catch (err) {
       console.error(err);

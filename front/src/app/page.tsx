@@ -16,6 +16,7 @@ import Random from '@/lib/random/string';
 // -- Types -- //
 import { Room } from '@/lib/type/types';
 import Image from "next/image";
+import { useAudio } from "@/lib/audio/audioProvider";
 
 export default function Home() {
   // -- Navigation -- //
@@ -85,6 +86,16 @@ export default function Home() {
       socket?.off("send-all-rooms"); // Remove the listener
     };
   }, [socket]);
+
+
+  // -- Sound Management -- //
+  const { playAudio } = useAudio();
+  const [buttonClickAudio, setButtonClickAudio] = useState<HTMLAudioElement | null>(null);
+
+  useEffect(() => {
+    const audio = new Audio("/sounds/button-click.mp3");
+    setButtonClickAudio(audio);
+  }, []);
 
   // -- Rooms management -- //
 
@@ -170,10 +181,11 @@ export default function Home() {
   }
 
   // -- Player character Management -- //
+
   const [playerCharacter, setPlayerCharacter] = useState<number>(0);
 
   const playerIconsLength = useMemo(() => {
-    return 5;
+    return 5; // Number of player icon files in the bear folder
   }, []);
 
   return (
@@ -232,9 +244,17 @@ export default function Home() {
         <div className='w-[40%] h-full max-w-md p-6 bg-white rounded-lg shadow-lg space-y-6'>
           <p className='text-xl font-bold'>Choose your character !</p>
           <div className='flex flex-row justify-around items-center h-full'>
-            <MdArrowBackIos className="cursor-pointer" size={50} onClick={() => setPlayerCharacter((prev) => (prev - 1 + playerIconsLength) % playerIconsLength)} />
+            <MdArrowBackIos className="cursor-pointer" size={50}
+              onClick={() => {
+                if (buttonClickAudio) playAudio(buttonClickAudio);
+                setPlayerCharacter((prev) => (prev - 1 + playerIconsLength) % playerIconsLength)
+              }} />
             <Image className="select-none" src={`/player-icons/bear/${playerCharacter ?? 0}.png`} alt="Player Character" width={100} height={100} />
-            <MdArrowBackIos size={50} className="rotate-180 cursor-pointer" onClick={() => setPlayerCharacter((playerCharacter + 1) % playerIconsLength)} />
+            <MdArrowBackIos size={50} className="rotate-180 cursor-pointer"
+              onClick={() => {
+                if (buttonClickAudio) playAudio(buttonClickAudio);
+                setPlayerCharacter((playerCharacter + 1) % playerIconsLength)
+              }} />
           </div>
         </div>
       </main>

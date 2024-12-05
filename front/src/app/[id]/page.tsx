@@ -5,6 +5,7 @@ import Clock from '@/components/element/Clock';
 import WordDisplay, { GameState } from '@/components/element/WordDisplay';
 import Round from '@/components/element/Round';
 import InvitationBox from '@/components/invitation/Invitation';
+import Audio from '@/components/element/Audio';
 
 // -- Librairies -- //
 import { useEffect, useRef, useState } from 'react';
@@ -22,11 +23,10 @@ import UserList from '@/components/list/SwitchButtonMode';
 import Chat from '@/components/Chat/Chat';
 import { MessagesProvider } from '@/lib/chat/chatProvider';
 
-export default function Page()
-{
+export default function Page() {
   // -- The socket -- //
   const { socket }: { socket: Socket | null } = useSocket();
-  const roomRef    = useRef<Room | null>(null);
+  const roomRef = useRef<Room | null>(null);
   const [thisRoom, setRoom] = useState<Room | null>(null);
 
   socket?.on('room-data-updated', ({ room }: { room: Room }) => {
@@ -96,7 +96,7 @@ export default function Page()
     p.setup = () => {
       if (canvasParentRef.current) {
         const { width, height } = canvasParentRef.current.getBoundingClientRect();
-        const canvas            = p.createCanvas(width, height);
+        const canvas = p.createCanvas(width, height);
 
         p.background(255);
 
@@ -114,8 +114,8 @@ export default function Page()
     };
 
     p.mouseDragged = () => {
-      const room: Room | null     = roomRef.current;
-      const draw: boolean         = canDrawRef.current;
+      const room: Room | null = roomRef.current;
+      const draw: boolean = canDrawRef.current;
       const choosingWord: boolean = isChoosingWordRef.current;
 
       if (!draw || choosingWord || !room || !socket)
@@ -128,10 +128,10 @@ export default function Page()
         if (!room?.currentTeamDrawer?.players.find((player) => player.id === socket.id))
           return;
       }
-      
+
       const currentTool = toolRef.current;
-      const x  = p.mouseX;
-      const y  = p.mouseY;
+      const x = p.mouseX;
+      const y = p.mouseY;
       const px = p.pmouseX;
       const py = p.pmouseY;
 
@@ -218,7 +218,7 @@ export default function Page()
   }, [me]);
 
   // -- Word List -- //
-  const [wordList      , setWordList]       = useState<{ id: number, text: string }[]>([]);
+  const [wordList, setWordList] = useState<{ id: number, text: string }[]>([]);
   const [isChoosingWord, setIsChoosingWord] = useState<boolean>(false);
 
   const isChoosingWordRef = useRef<boolean>(isChoosingWord);
@@ -228,13 +228,13 @@ export default function Page()
   }, [isChoosingWord]);
 
   // -- Game State -- //
-  const [gameState  , setGameState]   = useState<GameState>('waiting');
-  const [word       , setWord]        = useState<string>('');
+  const [gameState, setGameState] = useState<GameState>('waiting');
+  const [word, setWord] = useState<string>('');
   const [gameStarted, setGameStarted] = useState<boolean>(false);
-  const [canDraw    , setCanDraw]     = useState<boolean>(false);
-  const [timeLeft   , setTimeLeft]    = useState<number>(0);
-  const [showScore  , setShowScore]   = useState<boolean>(false);
-  const [winner     , setWinner]      = useState<{ id: string; score: number } | null>(null);
+  const [canDraw, setCanDraw] = useState<boolean>(false);
+  const [timeLeft, setTimeLeft] = useState<number>(0);
+  const [showScore, setShowScore] = useState<boolean>(false);
+  const [winner, setWinner] = useState<{ id: string; score: number } | null>(null);
 
   const canDrawRef = useRef<boolean>(canDraw);
 
@@ -390,7 +390,7 @@ export default function Page()
   useEffect(() => {
     if (!socket)
       return;
-    const handleTurnEnded = ({ scores, word, guessedPlayers } : { scores: ScoreBoard[], word: string, guessedPlayers: Player[] }) => {
+    const handleTurnEnded = ({ scores, word, guessedPlayers }: { scores: ScoreBoard[], word: string, guessedPlayers: Player[] }) => {
       setRoom((prevRoom) => prevRoom ? { ...prevRoom, scoreBoard: scores, guessedPlayers, currentWord: word } : prevRoom);
 
       console.log("Turn ended:", word, guessedPlayers, scores);
@@ -406,7 +406,7 @@ export default function Page()
   useEffect(() => {
     if (!socket)
       return;
-    const handleGameEnded = ({ winner, scores } : { winner: { id: string; score: number }, scores: { [playerId: string]: number } }) => {
+    const handleGameEnded = ({ winner, scores }: { winner: { id: string; score: number }, scores: { [playerId: string]: number } }) => {
       setCanDraw(false);
       setGameStarted(false);
       setShowScore(true);
@@ -416,16 +416,16 @@ export default function Page()
       if (socket && !p5Instance) {
         socket.on('send-room', (room: Room) => {
           setRoom(room);
-  
+
           for (let player of room.players) {
             if (player.id === socket.id) {
               setMe(player);
             }
           }
-  
+
           console.log('Room:', room);
         });
-  
+
         socket.emit('get-room', params.id);
       }
     };
@@ -453,7 +453,10 @@ export default function Page()
 
       {/* Header */}
       <div className="col-span-3 w-full bg-[#f37b78] text-white p-4 flex justify-between items-center border-b-2 border-b-[#c44b4a]">
-        <Clock time={timeLeft} />
+        <div className="flex flex-row w-auto gap-5 align-center justify-around">
+          <Clock time={timeLeft} />
+          <Audio />
+        </div>
         <WordDisplay gameState={gameState} word={thisRoom?.currentWord?.toLowerCase()} />
         <Round currentRound={thisRoom?.currentRound} totalRounds={thisRoom?.roomSettings.rounds} />
       </div>
@@ -466,7 +469,7 @@ export default function Page()
       {/* Canvas Section */}
       <div className="p-4 flex flex-col items-center w-full h-full">
 
-        {/* Canvas */}          
+        {/* Canvas */}
         <div className="relative w-full">
           <div ref={canvasParentRef} className="absolute w-full h-64 md:h-96 bg-white border border-gray-300 rounded-md mb-4">
             {/* The canvas will dynamically being load here.. */}
@@ -530,19 +533,19 @@ export default function Page()
 
         {thisRoom?.roomSettings.isClassicMode && gameStarted && canDraw && isDrawing(me!, thisRoom?.currentDrawer) && (
           <div className="flex items-center space-x-2 md:space-x-4">
-          <button onClick={() => setTool('pencil')}>Pencil</button>
-          <button onClick={() => setTool('eraser')}>Eraser</button>
+            <button onClick={() => setTool('pencil')}>Pencil</button>
+            <button onClick={() => setTool('eraser')}>Eraser</button>
 
-          <button
-            onClick={clearCanvas}
-            className="bg-red-400 px-3 md:px-4 py-1 md:py-2 rounded-md text-white"
-          >
-            Clear
-          </button>
-        </div>
+            <button
+              onClick={clearCanvas}
+              className="bg-red-400 px-3 md:px-4 py-1 md:py-2 rounded-md text-white"
+            >
+              Clear
+            </button>
+          </div>
         )}
 
-        {(!thisRoom?.roomSettings.isClassicMode && gameStarted && canDraw && thisRoom?.currentTeamDrawer?.players.find((player : Player) => player.id === me?.id)) && (
+        {(!thisRoom?.roomSettings.isClassicMode && gameStarted && canDraw && thisRoom?.currentTeamDrawer?.players.find((player: Player) => player.id === me?.id)) && (
           <div className="flex items-center space-x-2 md:space-x-4">
             <button onClick={() => setTool('pencil')}>Pencil</button>
             <button onClick={() => setTool('eraser')}>Eraser</button>
