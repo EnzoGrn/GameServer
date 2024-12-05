@@ -16,7 +16,7 @@ const socketContext = createContext<{
     setSocket: () => {}
 });
 
-const SERVER_URL = process.env.SERVER_URL || "http://192.168.0.10:3001";
+const SERVER_URL = process.env.SERVER_URL || "http://localhost:3001";
 
 export const SocketProvider = ({ children }: any) => {
     const [socket, setSocket] = useState<Socket | null>(null);

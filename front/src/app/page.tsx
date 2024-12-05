@@ -1,13 +1,16 @@
 'use client';
 
+// -- Icons -- //
+import { MdArrowBackIos } from "react-icons/md";
+
 // -- Components -- //
 import Title from '@/components/header/Title';
 import LabelBlock from '@/components/block/LabelBlock';
 
 // -- Librairies -- //
-import React, { useState, useEffect, use } from "react";
-import { useRouter, useSearchParams } from 'next/navigation';
+import React, { useState, useEffect, useMemo } from "react";
 import { useSocket } from '@/components/provider/SocketProvider';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useRoom } from '@/lib/room/RoomProvider';
 
 // -- Types -- //
@@ -16,12 +19,13 @@ import { User } from '@/lib/player/type';
 import { Lobby } from '@/lib/room/type';
 import { createRoom, joinRoom } from '@/lib/room/function';
 import { useSafeEffect } from '@/lib/react/useSafeEffect';
+import Image from "next/image";
 
 export default function Home()
 {
   // -- Navigation -- //
 
-  const router       = useRouter();
+  const router = useRouter();
   const searchParams = useSearchParams();
 
   // -- Room -- //
@@ -34,9 +38,9 @@ export default function Home()
 
   // -- Default inputs fields values -- //
     // -- Variables -- //
-  const [profile, setProfile] = useState<User.Profile>({ id: "", name: "", language: "English", avatar: "https://img.daisyui.com/images/stock/photo-1534528741775-53994a69daeb.webp" /* TODO: Change for a real avatar */ });
+  const [profile, setProfile] = useState<User.Profile>({ id: "", name: "", language: "English", avatar: 0 });
 
-    // -- Functions -- //
+  // -- Functions -- //
   const OnPlayerNameChange = (value: string) => {
     let name: string = value;
 
@@ -53,7 +57,7 @@ export default function Home()
     setProfile({ ...profile, language: language });
   }
 
-    // -- On load -- //
+  // -- On load -- //
 
   /*
    * @brief When the page is loaded, we get the player name and the language from the local storage.
@@ -61,7 +65,7 @@ export default function Home()
    * And if he never played before, the default values are used.
    */
   useEffect(() => {
-    let name    : string = localStorage.getItem("player")   || "";
+    let name: string = localStorage.getItem("player") || "";
     let language: string = localStorage.getItem("language") || "English";
 
     setProfile({ ...profile, name: name, language: language });
@@ -92,7 +96,7 @@ export default function Home()
   // -- Rooms management -- //
 
   const [availableRooms, setAvailableRooms] = useState<{ [key: string]: Room }>({}); // List of all available rooms never displayed
-  const [roomCode      , setRoomCode]       = useState<string | null>(null);
+  const [roomCode, setRoomCode] = useState<string | null>(null);
 
   useEffect(() => {
     const code = searchParams.get("code");
@@ -141,14 +145,20 @@ export default function Home()
 
   // -- Render -- //
 
+  // -- Player character Management -- //
+  const playerIconsLength = useMemo(() => {
+    return 5;
+  }, []);
+
   return (
-    <main className="flex flex-col items-center justify-center min-h-screen px-4 py-8">
+    <div className="flex flex-col items-center justify-center min-h-screen px-4 py-8">
 
       {/* Title of the game */}
       <Title title="Draw'It Together" />
-  
+
       {/* Main Section */}
-      <div className="w-full max-w-md p-6 bg-white rounded-lg shadow-lg space-y-6">
+      <main className='flex flex-row justify-between items-center gap-2'>
+        <div className="w-full max-w-md p-6 bg-white rounded-lg shadow-lg space-y-6">
 
         {/* Label Section */}
         <div className="w-full flex flex-row justify-between items-center gap-2">
@@ -191,7 +201,26 @@ export default function Home()
             Create Private Room
           </button>
         </div>
-      </div>
-    </main>
+
+        {/* Choose Character Section */}
+        <div className='w-full h-full max-w-md p-6 bg-white rounded-lg shadow-lg space-y-6'>
+          <p className='text-xl font-bold'>Choose your character !</p>
+          <div className='flex flex-row justify-around items-center h-full'>
+            <MdArrowBackIos
+              className="cursor-pointer"
+              size={50}
+              onClick={() => setProfile({ ...profile, avatar: (profile.avatar - 1 + playerIconsLength) % playerIconsLength })}
+            />
+            <Image className="select-none" src={`/player-icons/bear/${profile.avatar}.png`} alt="Player Character" width={100} height={100} />
+            <MdArrowBackIos
+              size={50}
+              className="rotate-180 cursor-pointer"
+              onClick={() => setProfile({ ...profile, avatar: (profile.avatar + 1) % playerIconsLength })}
+            />
+          </div>
+        </div>
+        </div>
+      </main>
+    </div>
   );
 }

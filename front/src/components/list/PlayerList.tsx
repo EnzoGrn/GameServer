@@ -4,7 +4,6 @@ import { useSocket } from "../provider/SocketProvider";
 import { Lobby } from "@/lib/room/type";
 import { useEffect, useState } from "react";
 import { useRoom } from "@/lib/room/RoomProvider";
-import { Room } from "@/lib/type/types";
 
 const PlayerList = ({ room }: { room: Lobby.Room }) => {
   const { socket } = useSocket();
@@ -68,15 +67,15 @@ const PlayerList = ({ room }: { room: Lobby.Room }) => {
               <div className="avatar indicator">
                 {player.isHost === true &&
                   <div
-                    className="indicator-item w-[24px] h-[24px] bg-center bg-cover"
-                    style={{
-                      backgroundImage: "url('crown.gif')",
-                      transform: 'scaleX(-1) translateY(-10px) translateX(-10px)',
-                    }}
+                  className="indicator-item w-[24px] h-[24px] bg-center bg-cover"
+                  style={{
+                    backgroundImage: "url('crown.gif')",
+                    transform: 'scaleX(-1) translateY(-10px) translateX(-10px)',
+                  }}
                   />
                 }
-                <div className="w-12 rounded-full">
-                  <img src={player.profile.avatar} />
+                <div className="w-12">
+                  <img src={`/player-icons/bear/${player.profile.avatar}.png`} alt="avatar" className="rounded-full" />
                 </div>
               </div>
             </div>

@@ -7,7 +7,7 @@ export namespace User {
     export interface Profile {
         id      ?: string;
         name     : string;
-        avatar  ?: string;
+        avatar   : number;
         language : string;
     };
 
