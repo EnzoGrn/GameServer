@@ -1,30 +1,48 @@
-import { Player, Room } from '@/lib/type/types';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import ListTeams from './ListTeams';
 import PlayerList from './PlayerList';
-import { Socket } from 'socket.io-client';
+import { useSocket } from '../provider/SocketProvider';
+import { Lobby } from '@/lib/room/type';
 
-const UserList = ({ thisRoom, isClassicModeRoom, me, socket }: { thisRoom: Room, isClassicModeRoom: boolean, me: Player, socket: Socket }) => {
-  const [isClassicMode, setIsClassicMode] = useState<boolean>(isClassicModeRoom);
+const UserList = ({ room, options } : { room: Lobby.Room, options?: Lobby.Settings }) => {
+  const { socket } = useSocket();
 
-  const switchTeam = () => {
-    socket?.emit('change-team-play-mode', {
-        roomId: thisRoom?.id,
+  const [isClassicMode, setIsClassicMode] = useState<Lobby.GameMode>(room.settings.gameMode);
+
+  useEffect(() => {
+    if (!socket)
+      return;
+    socket.on("update-settings", (settings: Lobby.Settings) => {
+      console.log("[update-settings]: ", settings);
+
+      setIsClassicMode(settings.gameMode);
     });
 
-    setIsClassicMode((prevMode) => !prevMode);
-  };
+    return () => {
+      socket.off("update-settings");
+    }
+  }, [socket, room]);
 
-  socket?.on('mode-update', ({isClassicMode}) => {
-    setIsClassicMode(isClassicMode);
-  });
+  useEffect(() => {
+    if (!socket)
+      return;
+    socket.on("update-gamemode", (mode: Lobby.GameMode) => {
+      console.log("[update-gamemode]: ", mode);
+
+      setIsClassicMode(mode);
+    });
+
+    return () => {
+      socket.off("update-settings");
+    }
+  }, [socket, room]);
 
   return (
     <div className="h-full flex w-full">
-      {!isClassicMode ? (
-        <ListTeams room={thisRoom} player={me} />
+      {isClassicMode === Lobby.GameMode.Team ? (
+        <ListTeams room={room} />
       ) : (
-        <PlayerList players={thisRoom?.players} me={me} drawer={thisRoom?.currentDrawer} scoreBoard={thisRoom?.scoreBoard} guessed={thisRoom?.guessedPlayers} />
+        <PlayerList room={room} />
       )}
     </div>
   );

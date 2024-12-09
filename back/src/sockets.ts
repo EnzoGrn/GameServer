@@ -1,324 +1,330 @@
-// src/sockets.ts
 import { Server, Socket } from "socket.io";
-import { rooms, createRoom } from "./rooms";
-import { Player, Room, ScoreBoard, Team } from "./types";
-import { addPlayerToRoom } from "./players";
-import { selectWords } from "./words";
+import { rooms } from "./rooms";
+import { SelectWords } from "./tools/words";
 import { changeTeamPlayMode, addPlayerToTeam, removePlayerFromTeam } from "./teams";
 import { ReceivedMessage, SystemMessage } from "./chat/chat";
 import { SendCommandToUser } from "./tools/command";
 import { ErrorColor, OrangeColor, WarningColor } from "./tools/color";
 import { Message } from "./chat/messageType";
-
-function calculateWinner(room: Room) {
-  return room.scoreBoard.reduce((prev, current) => (prev.score > current.score ? prev : current));
-}
+import { Lobby } from "./room/type";
+import { User } from "./user/type";
 
 export function setupSocket(io: Server) {
   io.on("connection", (socket: Socket) => {
     console.log("A user connected:", socket.id);
 
-    /**
-     * @function
-     * @name socket.on("get-all-rooms")
-     * @description
-     * Cette fonction écoute l'événement "get-all-rooms" émis par le client. Lorsqu'il est reçu,
-     * elle déclenche l'émission de l'événement "send-all-rooms" qui contient la liste actuelle des rooms.
-     *
-     * @event
-     * @name get-all-rooms
-     * @description
-     * L'événement "get-all-rooms" est émis par le client pour demander les données des rooms
-     * disponibles à l'instant.
-     *
-     * @event
-     * @name send-all-rooms
-     * @description
-     * L'événement "send-all-rooms" est émis en réponse à "get-all-rooms" et contient la liste actuelle des rooms
-     * disponibles. Il est envoyé au client afin de mettre à jour l'interface utilisateur.
-     *
-     * @returns {void} Cette fonction ne renvoie rien.
-     */
-    socket.on("get-all-rooms", () => {
-      socket.emit("send-all-rooms", rooms);
+    socket.on("create-room", (profile: User.Profile) => {
+      console.log("[create-room | " + socket.id + "]: ", profile);
+
+      var newRoom: Lobby.Room = Lobby.CreateRoom(profile, false);
+
+      socket.emit("room-created", newRoom as Lobby.Room);
+      socket.join(newRoom.id);
+
+      socket.emit("message-received", SystemMessage("You are the host!", OrangeColor) as Message);
     });
 
-    socket.on("get-room", (roomId) => {
-      socket.emit("send-room", rooms[roomId]);
-    });
+    socket.on("join-room", (data: any) => {
+      const { profile, code } : { profile: User.Profile, code: string | undefined } = data;
 
-    /**
-     * @function
-     * @name socket.on("create-room")
-     * @description
-     * Cette fonction écoute l'événement "create-room" émis par le client. Lorsqu'il est reçu,
-     * elle crée une nouvelle room avec les données reçues et émet l'événement "room-data-updated"
-     * pour informer les autres clients de la mise à jour.
-     *
-     * @event
-     * @name create-room
-     * @description
-     * L'événement "create-room" est émis par le client pour créer une nouvelle room avec les données
-     * fournies (roomId, userAvatar, userId, host, userName, timestamp).
-     *
-     * @event
-     * @name room-data-updated
-     * @description
-     * L'événement "room-data-updated" est émis pour informer les clients de la mise à jour des données
-     * de la room spécifiée.
-     *
-     * @param {Object} data Les données de la room à créer.
-     * @param {string} data.roomId L'identifiant de la room.
-     * @param {string} data.userAvatar L'avatar de l'utilisateur.
-     * @param {string} data.userId L'identifiant de l'utilisateur.
-     * @param {boolean} data.host Indique si l'utilisateur est l'hôte de la room.
-     * @param {string} data.userName Le nom de l'utilisateur.
-     * @param {number} data.timestamp Le timestamp de la connexion de l'utilisateur.
-     *
-     * @returns {void} Cette fonction ne renvoie rien.
-     */
-    socket.on("create-room", ({ roomId, userAvatar, userId, userName }) => {
-      const roomTimestamp = Date.now();
-      const initialPlayer: Player = {
-        id: userId,
-        userAvatar,
-        userName,
-        host: true,
-        hasGuessed: false,
-        kicksToOut: 0,
-        kicksGot: [],
-        timestamp: Date.now()
-      };
-      const newRoom = createRoom(roomId, initialPlayer, roomTimestamp);
+      console.log("[join-room | " + socket.id + "]: ", profile, code);
 
-      console.log("Room created with id:", roomId);
+      const { room, isNew } : { room: Lobby.Room, isNew: boolean } = Lobby.JoinRoom(profile, code);
 
-      if (!newRoom.roomSettings.isClassicMode) {
-        addPlayerToTeam(newRoom, initialPlayer, newRoom.teams[0]);
+      socket.emit("room-joined", room as Lobby.Room);
+      socket.join(room.id);
+
+      if (isNew) {
+        socket.emit("message-received", SystemMessage("Need to wait for another player to start the game!", OrangeColor) as Message);
+      } else {
+        io.to(room.id).emit("message-received", SystemMessage(`${profile.name} joined the room!`, OrangeColor) as Message);
+        io.to(room.id).emit("update-room", room as Lobby.Room);
+        io.to(room.id).emit("update-state", room.state as Lobby.State);
       }
 
-      socket.join(roomId);
-      io.to(roomId).emit("room-data-updated", { room: newRoom });
-    });
+      if (room.settings.gameMode === Lobby.GameMode.Team) {
+        room.teams[room.teams.length - 1].players.push(room.users[room.users.length - 1]);
 
-    /**
-     * @function
-     * @name socket.on("join-room")
-     * @description
-     * Cette fonction écoute l'événement "join-room" émis par le client. Lorsqu'il est reçu,
-     * elle ajoute l'utilisateur à la room spécifiée et émet l'événement "user-is-joined" pour
-     * informer les autres clients de la connexion de l'utilisateur.
-     *
-     * @event
-     * @name join-room
-     * @description
-     * L'événement "join-room" est émis par le client pour rejoindre une room spécifique.
-     *
-     * @event
-     * @name user-is-joined
-     * @description
-     * L'événement "user-is-joined" est émis pour informer les clients de la connexion d'un nouvel utilisateur
-     * à la room spécifiée.
-     *
-     * @param {Object} data Les données de la room à rejoindre.
-     * @param {string} data.roomId L'identifiant de la room.
-     * @param {string} data.userAvatar L'avatar de l'utilisateur.
-     * @param {string} data.userId L'identifiant de l'utilisateur.
-     * @param {string} data.userName Le nom de l'utilisateur.
-     * @param {number} data.timestamp Le timestamp de la connexion de l'utilisateur.
-     *
-     * @returns {void} Cette fonction ne renvoie rien.
-     */
-    socket.on("join-room", ({ roomId, userAvatar, userId, userName }) => {
-      // Vérifier si la room existe
-      const room = rooms[roomId];
-      if (!room) {
-        console.error(`Room ${roomId} does not exist.`);
-        return;
+        socket.emit("update-teams", room.teams as Lobby.Team[]);
       }
-
-      // Ajouter le joueur et le message de jointure
-      addPlayerToRoom(room, userId, userAvatar, userName);
-
-      // Joindre la room avec Socket.io
-      socket.join(roomId);
-
-      // Mettre à jour les données de la room pour tous les clients
-      console.log("User joined room:", room);
-      io.to(roomId).emit("room-data-updated", { room: rooms[roomId] });
-      io.to(roomId).emit("mode-update", { isClassicMode: room.roomSettings.isClassicMode });
-      io.to(roomId).emit("received-message", {
-        message: SystemMessage(room, `${userName} joined the room!`, OrangeColor) as Message,
-        guessed: room.guessedPlayers as Player[]
-      });
     });
 
-    /**
-     * @function
-     * @name socket.on("disconnect")
-     * @description
-     * Cette fonction écoute l'événement "disconnect" émis par le client. Lorsqu'il est reçu,
-     * elle gère la déconnexion de l'utilisateur en supprimant l'utilisateur de la room et en
-     * informant les autres clients de la déconnexion.
-     *
-     * @event
-     * @name disconnect
-     * @description
-     * L'événement "disconnect" est émis par le client lorsqu'il se déconnecte du serveur.
-     *
-     * @returns {void} Cette fonction ne renvoie rien.
-     */
     socket.on("disconnect", () => {
-      console.log("User disconnected: ", socket.id);
-      let player: Player | undefined;
+      console.log("[disconnect | " + socket.id + "]");
 
-      for (let room of Object.values(rooms)) {
-        player = room.players.find((checker) => checker.id === socket.id);
+      let user: User.Player | undefined;
 
-        if (player) {
-          room.players = room.players.filter((player) => player.id !== socket.id);
-          room.scoreBoard = room.scoreBoard.filter((player) => player.playerId !== socket.id);
+      for (let room of Object.values(Lobby.AllRoom)) {
+        user = room.users.find((checker: User.Player) => checker.profile.id === socket.id);
+
+        // -- Remove the user from the room (delete the room if empty)
+        if (user) {
+          room.users = room.users.filter((player: User.Player) => player.profile.id !== socket.id);
+
+          io.to(room.id).emit("message-received", SystemMessage(`${user.profile.name} left the room!`, OrangeColor) as Message);
+          io.to(room.id).emit("update-users", room.users as User.Player[]);
+
+          if (room.users.length === 0)
+            delete Lobby.AllRoom[room.id];
+
+          if (room.teams && room.teams.length > 0) {
+            room.teams.forEach((team: Lobby.Team) => {
+              team.players = team.players.filter((player: User.Player) => player.profile.id !== socket.id);
+            });
+
+            room.teams = room.teams.filter((team: Lobby.Team) => team.players.length > 0);
+
+            io.to(room.id).emit("update-teams", room.teams as Lobby.Team[]);
+          }
 
           socket.emit("go-home");
+        }
 
-          // Si la room est vide, la supprimer
-          if (room.players.length === 0) {
-            delete rooms[room.id];
+        // -- Change the host if the host left
+        if (!room.isDefault && user && user.isHost && Lobby.AllRoom[room.id]) {
+          var oldPlayer: User.Player = room.users[0];
+
+          oldPlayer.isHost = true;
+
+          io.to(room.id).emit("message-received", SystemMessage(`${oldPlayer.profile.name} is now the room owner!`, OrangeColor) as Message);
+          io.to(room.id).emit("update-users", room.users as User.Player[]);
+        }
+
+        // -- Check if there is enough player to continue the 
+        if (room.state.isStarted) {
+          if (room.settings.gameMode === Lobby.GameMode.Classic && room.users.length < 2) {
+            _EndGame(room.id);
+          } else if (room.settings.gameMode === Lobby.GameMode.Team && room.teams?.length < 2) {
+            _EndGame(room.id);
           }
-
-          io.to(room.id).emit("received-message", {
-            message: SystemMessage(room, `${player.userName} left the room!`, OrangeColor) as Message,
-            guessed: room.guessedPlayers as Player[]
-          });
-
-          // Si l'hôte se déconnecte, choisir un nouveau hôte aléatoire
-          if (player.host && room.players.length > 0) {
-            const randomPlayer = room.players[Math.floor(Math.random() * room.players.length)];
-
-            room.players = room.players.map((checker) =>
-              checker.id === randomPlayer.id ? { ...checker, host: true } : checker
-            );
-
-            io.to(room.id).emit("received-message", {
-              message: SystemMessage(room, `${randomPlayer.userName} is now the room owner!`, OrangeColor) as Message,
-              guessed: room.guessedPlayers as Player[]
-            });
-          }
-
-          if (room.gameStarted && room.players.length < 2) {
-            endGame(room.id);
-          }
-
-          // Si la room n'est pas en mode classique, enlever le joueur de son équipe
-          if (!room.roomSettings.isClassicMode) {
-            removePlayerFromTeam(room, player);
-          }
-
-          io.to(room.id).emit("room-data-updated", { room });
         }
       }
     });
 
-    /**
-     * @function
-     * @name socket.on("leave")
-     * @description
-     * Cette fonction écoute l'événement "leave" émis par le client. Lorsqu'il est reçu,
-     * elle gère la sortie de l'utilisateur de la room en supprimant l'utilisateur de la room
-     * et en informant les autres clients de la sortie de l'utilisateur.
-     *
-     * @event
-     * @name leave
-     * @description
-     * L'événement "leave" est émis par le client pour quitter la room actuelle.
-     *
-     * @returns {void} Cette fonction ne renvoie rien.
-     */
-    socket.on("leave", ({ roomCode, mySelf }) => {
-      socket.emit("go-home");
-      const message: any = {
-        text: `${mySelf.userName} left the room!`,
-        timestamp: Date.now(),
-      };
+    socket.on("leave", () => {
+      console.log("[leave | " + socket.id + "]");
 
-      const room = rooms[roomCode];
+      let user: User.Player | undefined;
 
-      room.players = room.players.filter((player) => player.id !== mySelf.id);
-      room.scoreBoard = room.scoreBoard.filter((score) => score.playerId !== mySelf.id);
-      //room.messages.push(message);
+      for (let room of Object.values(Lobby.AllRoom)) {
+        user = room.users.find((checker: User.Player) => checker.profile.id === socket.id);
 
-      if (room.players.length === 0) {
-        delete rooms[roomCode];
+        // -- Remove the user from the room (delete the room if empty)
+        if (user) {
+          room.users = room.users.filter((player: User.Player) => player.profile.id !== socket.id);
+
+          io.to(room.id).emit("message-received", SystemMessage(`${user.profile.name} left the room!`, OrangeColor) as Message);
+          io.to(room.id).emit("update-users", room.users as User.Player[]);
+
+          if (room.users.length === 0)
+            delete Lobby.AllRoom[room.id];
+
+          if (room.teams && room.teams.length > 0) {
+            room.teams.forEach((team: Lobby.Team) => {
+              team.players = team.players.filter((player: User.Player) => player.profile.id !== socket.id);
+            });
+
+            room.teams = room.teams.filter((team: Lobby.Team) => team.players.length > 0);
+
+            io.to(room.id).emit("update-teams", room.teams as Lobby.Team[]);
+          }
+
+          socket.emit("go-home");
+        }
+
+        // -- Change the host if the host left
+        if (!room.isDefault && user && user.isHost && Lobby.AllRoom[room.id]) {
+          var oldPlayer: User.Player = room.users[0];
+
+          oldPlayer.isHost = true;
+
+          io.to(room.id).emit("message-received", SystemMessage(`${oldPlayer.profile.name} is now the room owner!`, OrangeColor) as Message);
+          io.to(room.id).emit("update-users", room.users as User.Player[]);
+        }
+
+        // -- Check if there is enough player to continue the 
+        if (room.state.isStarted) {
+          if (room.settings.gameMode === Lobby.GameMode.Classic && room.users.length < 2) {
+            _EndGame(room.id);
+          } else if (room.settings.gameMode === Lobby.GameMode.Team && room.teams?.length < 2) {
+            _EndGame(room.id);
+          }
+        }
+      }
+    });
+
+    socket.on("start-game", (room_id: string) => {
+      console.log("[start-game | " + socket.id + "]: ", room_id);
+
+      _StartGame(room_id);
+    });
+
+    socket.on("sent-message", (data: any) => {
+      const { room_id, message } : { room_id: string, message: Message } = data;
+
+      console.log("[sent-message | " + socket.id + "]: ", room_id, message);
+
+      const res: { message: Message, room: Lobby.Room | null, isClose: boolean } = ReceivedMessage(io, socket, room_id, message);
+
+      if (!message || !res.room)
+        return;
+      io.to(room_id).emit("message-received", res.message as Message);
+
+      if (res.isClose) {
+        SendCommandToUser(io, socket, res.room, "message-received", SystemMessage(`${message.content} is close!`, WarningColor) as Message);
       }
 
-      io.to(roomCode).emit("received-message", {
-        message: SystemMessage(room, `${mySelf.userName} left the room!`, OrangeColor) as Message,
-        guessed: room.guessedPlayers as Player[]
+      io.to(room_id).emit("update-users", res.room.users as User.Player[]);
+    });
+
+    socket.on("word-chosen", (data: any) => {
+      const { room_id, word } : { room_id: string, word: string } = data;
+
+      console.log("[word-chosen | " + socket.id + "]: ", room_id, word);
+
+      const room: Lobby.Room | undefined = Lobby.AllRoom[room_id];
+
+      if (!room)
+        return;
+      if (room.settings.gameMode === Lobby.GameMode.Classic && room.currentDrawer === undefined && socket.id !== (room.currentDrawer as User.Player).profile.id)
+        return;
+      else if (room.settings.gameMode === Lobby.GameMode.Team && (room.currentDrawer === undefined || (room.currentDrawer as User.Player[]).length) && !(room.currentDrawer as User.Player[])?.find((player: User.Player) => player.profile.id === socket.id))
+        return;
+      room.currentWord = word;
+
+      io.to(room_id).emit("word-chosen", word as string);
+
+      room.state.canDraw        = true;
+      room.state.isChoosingWord = false;
+
+      io.to(room_id).emit("update-state", room.state as Lobby.State);
+
+      _StartDrawingTimer(room_id);
+    });
+
+    const _StartGame = (room_id: string) => {
+      var room: Lobby.Room | undefined = Lobby.AllRoom[room_id];
+
+      if (!room)
+        return;
+      if (room.users.length < 2) {
+        io.to(room.id).emit("message-received", SystemMessage("Room must have at least two players to start the game!", ErrorColor) as Message);
+
+        return;
+      }
+
+      if (room.settings.gameMode === Lobby.GameMode.Team) {
+        var allTeamHavePlayer: boolean = room.teams.every((team: Lobby.Team) => team.players.length > 0);
+
+        if (!allTeamHavePlayer) {
+          io.to(room.id).emit("message-received", SystemMessage("Every team must have at least one player to start the game!", ErrorColor) as Message);
+
+          return;
+        }
+
+        var numberOfPlayerInTeam: number = 0;
+
+        room.teams.forEach((team: Lobby.Team) => {
+          numberOfPlayerInTeam += team.players.length;
+        });
+
+        if (numberOfPlayerInTeam !== room.users.length) {
+          io.to(room.id).emit("message-received", SystemMessage("Every player must be in a team to start the game!", ErrorColor) as Message);
+
+          return;
+        }
+
+        room.teams.forEach((team: Lobby.Team) => {
+          team.players.forEach((player: User.Player) => {
+            player.hasGuessed = false;
+            player.score = 0;
+          });
+          team.score = 0;
+        });
+
+        io.to(room_id).emit("update-teams", room.teams as Lobby.Team[]);
+      }
+
+      room.users.forEach((player: User.Player) => {
+        // -- Reset the score of the player
+        player.hasGuessed = false;
+        player.score = 0;
       });
 
-      if (mySelf.host && room.players.length > 0) {
-        const randomPlayer = room.players[Math.floor(Math.random() * room.players.length)];
+      io.to(room.id).emit("update-users", room.users as User.Player[]);
 
-        room.players = room.players.map((checker) =>
-          checker.id === randomPlayer.id ? { ...checker, host: true } : checker
-        );
+      room.state.showScore = false;
+      room.state.isStarted = true;
 
-        io.to(roomCode).emit("received-message", {
-          message: SystemMessage(room, `${randomPlayer.userName} is now the room owner!`, OrangeColor) as Message,
-          guessed: room.guessedPlayers as Player[]
+      io.to(room_id).emit("update-state", room.state as Lobby.State);
+
+      room.currentTurn = 1;
+
+      if (room.settings.gameMode === Lobby.GameMode.Classic) {
+        room.currentDrawer = room.users[room.users.length - 1];
+      } else {
+        room.currentDrawer = room.teams[room.teams.length - 1].players;
+      }
+
+      _StartTurn(room_id);
+    };
+
+    const _StartTurn = (room_id: string) => {
+      const room: Lobby.Room | undefined = Lobby.AllRoom[room_id];
+
+      if (!room)
+        return;
+      const words: { id: number, text: string }[] = SelectWords(room);
+
+      room.users.forEach((player: User.Player) => {
+        player.hasGuessed = false;
+      });
+
+      io.to(room_id).emit("update-settings", room.settings as Lobby.Settings);
+      io.to(room_id).emit("update-users", room.users as User.Player[]);
+
+      room.state.isChoosingWord = true;
+      room.state.canDraw        = false;
+
+      io.to(room_id).emit("update-state", room.state as Lobby.State);
+
+      if (room.settings.gameMode === Lobby.GameMode.Classic) {
+        const currentDrawer: User.Player = room.currentDrawer as User.Player;
+
+        io.to(room_id).emit("pre-starting-turn", {
+          drawer: currentDrawer as User.Player,
+          round: room.currentTurn as number,
+          words: words as { id: number, text: string }[]
+        });
+      } else {
+        room.teams.forEach((team: Lobby.Team) => {
+          team.players.forEach((player: User.Player) => {
+            player.hasGuessed = false;
+          });
+        });
+
+        io.to(room_id).emit("update-teams", room.teams as Lobby.Team[]);
+
+        const currentDrawer: User.Player[] = room.currentDrawer as User.Player[];
+
+        io.to(room_id).emit("pre-starting-turn", {
+          drawer: currentDrawer as User.Player[],
+          round: room.currentTurn as number,
+          words: words as { id: number, text: string }[]
         });
       }
 
-      if (room.gameStarted && room.players.length < 2) {
-        endGame(room.id);
-      }
-
-      if (!room.roomSettings.isClassicMode) {
-        const player: Player = room.players.find((player) => player.id === mySelf.id);
-        removePlayerFromTeam(room, player);
-      }
-
-      io.to(roomCode).emit("room-data-updated", { room: rooms[roomCode] });
-    });
-
-    socket.on("set-custom-words-only", ({ roomCode, boolean }) => {
-      rooms[roomCode].roomSettings.useCustomWords = boolean;
-      io.to(roomCode).emit("room-data-updated", { room: rooms[roomCode] });
-    });
-
-    socket.on("set-number-rounds", ({ setting, roomCode }) => {
-      rooms[roomCode].roomSettings.rounds = setting;
-      io.to(roomCode).emit("room-data-updated", { room: rooms[roomCode] });
-    });
-
-    socket.on("set-draw-timer", ({ setting, roomCode }) => {
-      rooms[roomCode].roomSettings.drawTime = setting;
-      io.to(roomCode).emit("room-data-updated", { room: rooms[roomCode] });
-    });
-
-    socket.on("set-players-number", ({ setting, roomCode }) => {
-      rooms[roomCode].roomSettings.players = setting;
-      io.to(roomCode).emit("room-data-updated", { room: rooms[roomCode] });
-    });
-
-    socket.on("set-hints-number", ({ setting, roomCode }) => {
-      rooms[roomCode].roomSettings.hints = setting;
-      io.to(roomCode).emit("room-data-updated", { room: rooms[roomCode] });
-    });
-
-    socket.on("set-word-count", ({ setting, roomCode }) => {
-      rooms[roomCode].roomSettings.wordCount = setting;
-      io.to(roomCode).emit("room-data-updated", { room: rooms[roomCode] });
-    });
+      io.to(room_id).emit("update-users", room.users as User.Player[]);
+    };
 
     socket.on('mouse', (data) => {
-      const room = rooms[data.roomCode];
+      const room: Lobby.Room | undefined = Lobby.AllRoom[data.roomCode];
 
-      if (!room) return;
-
-      if (room.roomSettings.isClassicMode && room.currentDrawer.id !== socket.id) {
+      if (!room)
+        return;
+      if (room.settings.gameMode === Lobby.GameMode.Classic && (room.currentDrawer as User.Player | undefined)?.profile.id !== socket.id) {
           return;
-      } else if (!room.roomSettings.isClassicMode && !room?.currentTeamDrawer?.players.find((player) => player.id === socket.id)) {
+      } else if (room.settings.gameMode === Lobby.GameMode.Team && !(room.currentDrawer as User.Player[])?.find((player: User.Player) => player.profile.id === socket.id)) {
         return;
       }
 
@@ -329,300 +335,369 @@ export function setupSocket(io: Server) {
       socket.broadcast.emit('clear-canvas');
     });
 
-    socket.on("start-game", ({ roomCode }) => {
-      const room = rooms[roomCode];
-      if (!room || room.players.length < 2) {
-        io.to(roomCode).emit("received-message", {
-          message: SystemMessage(room, "Room must have at least two players to start the game!", ErrorColor) as Message,
-          guessed: [] as Player[] });
-        io.to(roomCode).emit("room-data-updated", { room });
+    const _StartDrawingTimer = (room_id: string) => {
+      const room: Lobby.Room | undefined = Lobby.AllRoom[room_id];
+
+      if (!room)
         return;
-      }
-      room.gameStarted = true;
-
-      if (room.roomSettings.isClassicMode) {
-        room.currentDrawer = room.players[room.players.length - 1];
-        room.currentDrawerIndex = room.players.length - 1;
-      } else {
-        room.currentTeamDrawer = room.teams[0];
-        room.currentTeamDrawerIndex = 0;
-      }
-      room.currentRound = 1;
-      startTurn(roomCode);
-    });
-
-    socket.on("send-message", ({ room_id, notify }) => {
-      const { message, room, isClose } : { message: Message, room: Room | null, isClose: boolean } = ReceivedMessage(io, socket, room_id, notify);
-
-      if (!message || !room)
-        return;
-      io.to(room_id).emit("received-message", {
-        message: message as Message,
-        guessed: room.guessedPlayers as Player[]
-      });
-
-      if (isClose) {
-        SendCommandToUser(io, socket, room, "received-message", {
-          message: SystemMessage(room, `${message.content} is close!`, WarningColor) as Message,
-          guessed: room.guessedPlayers as Player[]
-        });
-      }
-    });
-
-    socket.on("get-word-list", ({ roomCode }) => {
-      const room = rooms[roomCode];
-      if (!room) {
-        return console.error("Room not found:", roomCode);
-      }
-
-      const selectedWords = selectWords(room);
-      io.to(roomCode).emit("send-word-list", { selectedWords });
-    });
-
-    socket.on('player-guessed', ({ roomCode, playerId }) => {
-      const room = rooms[roomCode];
-      if (!room) return;
-
-      if (room.roomSettings.isClassicMode) {
-        if (!room.guessedPlayers.includes(playerId)) {
-          room.guessedPlayers.push(playerId);
-        }
-      } else {
-        const player = room.players.find((player) => player.id === playerId);
-        const team = room.teams.find((team) => team.id === player?.teamId);
-
-        if (!team?.hasGuessed) {
-          team.hasGuessed = true;
-          room.guessedTeams.push(team);
-        }
-      }
-    });
-
-    socket.on("word-chosen", ({ roomId, word }) => {
-      const room = rooms[roomId];
-      if (!room) {
-        console.error("Room not found:", roomId);
-        return;
-      }
-
-      let currentDrawer: Player = null;
-
-      if (room.roomSettings.isClassicMode) {
-        currentDrawer = room.players[room.currentDrawerIndex];
-      } else {
-        const currentTeamDrawer = room.teams[room.currentTeamDrawerIndex];
-        currentDrawer = currentTeamDrawer.players[0];
-      }
-
-      console.log("Word chosen received from:", socket.id, "Expected drawer:", currentDrawer.id);
-
-      if (socket.id !== currentDrawer.id) {
-        console.error("Unauthorized word selection attempt by:", socket.id);
-        return;
-      }
-      room.currentWord = word;
-      console.log("Word chosen:", word);
-
-      if (room.roomSettings.isClassicMode) {
-        io.to(roomId).emit("word-chosen", { currentWord: word, wordLength: word.length });
-      } else {
-        const players : Player[]= room.teams[room.currentTeamDrawerIndex].players;
-
-        io.to(roomId).emit("word-chosen-team", { currentWord: word, wordLength: word.length, DrawerPlayersTeam: players});
-      }
-      startDrawingTimer(roomId);
-    });
-
-    function startTurn(roomId: string) {
-      console.log("Starting turn for room:", roomId);
-      const room = rooms[roomId];
-      const wordOptions = selectWords(room);
-      
-      if (room.roomSettings.isClassicMode) {
-        const currentDrawer = room.players[room.currentDrawerIndex];
-        io.to(roomId).emit("turn-started", { drawer: currentDrawer, round: room.currentRound });
-        io.to(currentDrawer.id).emit("choose-word", { words: wordOptions });
-      } else {
-        const team = room.teams[room.currentTeamDrawerIndex];
-        const firstPlayer = team.players[0];
-
-        io.to(roomId).emit("turn-started-team", { currentTeamDrawer: room.currentTeamDrawer, round: room.currentRound, currentDrawer: firstPlayer });
-
-        // Get the first player of the current team drawer
-        io.to(firstPlayer.id).emit("choose-word", { words: wordOptions });
-      }
-    }
-
-    function startDrawingTimer(roomId: string) {
-      const room = rooms[roomId];
-      let timeLeft = room.roomSettings.drawTime;
+      let timeLeft = room.settings.drawTime;
 
       const timer = setInterval(() => {
         timeLeft -= 1;
-        io.to(roomId).emit("timer-update", { timeLeft });
 
-        if (room.roomSettings.isClassicMode) {
-          if (timeLeft <= 0 || room.guessedPlayers.length === room.players.length - 1) {
-            clearInterval(timer);
-            endTurn(roomId);
+        io.to(room_id).emit("timer-update", timeLeft as number);
+
+        if (room.settings.gameMode === Lobby.GameMode.Classic) {
+          var guessed: number = room.users.filter((player: User.Player) => player.hasGuessed).length;
+
+          if (timeLeft <= 0 || guessed === room.users.length - 1) {
+            clearInterval(timer); // To stop the timer
+            _EndTurn(room_id);
           }
         } else {
-          if (timeLeft <= 0 || room.guessedTeams.length === room.teams.length - 1) {
+          var everyOneGuessed: boolean = true;
+
+          room.teams.forEach((team: Lobby.Team) => {
+            if (team.players[0] === (room.currentDrawer as User.Player[])[0])
+              return;
+              if (team.players[0].hasGuessed === false)
+                everyOneGuessed = false;
+          });
+
+          if (timeLeft <= 0 || everyOneGuessed) {
             clearInterval(timer);
-            endTurn(roomId);
+            _EndTurn(room_id);
           }
+        }
+
+        // If the time is over, we stop the timer and go to the next turn
+        if (timeLeft <= 0) {
+          clearInterval(timer);
+          _EndTurn(room_id);
         }
       }, 1000);
-    }
+    };
 
-    function endTurn(roomId: string) {
-      const room = rooms[roomId];
-      console.log("Guessed players:", room.guessedPlayers);
+    const _EndTurn = (room_id: string) => {
+      const room: Lobby.Room | undefined = Lobby.AllRoom[room_id];
 
-      if (room.roomSettings.isClassicMode) {
-        room.guessedPlayers?.forEach((player) => {
-          room.scoreBoard.find((score: ScoreBoard) => score.playerId === player.id).score += 100;
-        });
+      if (!room)
+        return;
+      io.to(room_id).emit("timer-update", room.settings.drawTime as number);
 
-        room.guessedPlayers = [];
+      room.users.forEach((player: User.Player) => {
+        if (player.hasGuessed) {
+          player.score += 100;
+        }
+      });
 
-        io.to(roomId).emit("turn-ended", {
-          scores: room.scoreBoard,
-          word: room.currentWord,
-          guessedPlayers: room.guessedPlayers,
-        });
+      room.teams?.forEach((team: Lobby.Team) => {
+        if (team.players[0].hasGuessed) {
+          team.score += 100;
+        }
+      });
 
-        room.currentDrawerIndex = (room.currentDrawerIndex + 1) % room.players.length;
-        room.currentDrawer = room.players[room.currentDrawerIndex];
-        if (room.currentDrawerIndex === room.players.length - 1) {
-          room.currentRound += 1;
-          if (room.currentRound > room.roomSettings.rounds) {
-            endGame(roomId);
+      io.to(room_id).emit("turn-ended", room.currentWord as string);
+
+      room.state.canDraw = false;
+        
+      io.to(room_id).emit("update-state", room.state as Lobby.State);
+
+      if (room.settings.gameMode === Lobby.GameMode.Classic) {
+        const drawer = room.currentDrawer as User.Player;
+
+        drawer.score += 25 * room.users.filter((player: User.Player) => player.hasGuessed).length;
+
+        io.to(room_id).emit("update-users", room.users as User.Player[]);
+
+        // Get index of current drawer
+        var index: number = room.users.findIndex((player: User.Player) => player.profile.id === (room.currentDrawer as User.Player | undefined)?.profile.id);
+
+        index = (index + 1) % room.users.length;
+
+        room.currentDrawer = room.users[index];
+
+        if (index === room.users.length - 1) {
+          room.currentTurn += 1;
+
+          if (room.currentTurn > room.settings.maxTurn) {
+            _EndGame(room_id);
+
             return;
           }
         }
 
-        for (let player of room.players) {
-          player.hasGuessed = false;
-        }
-
-        room.guessedPlayers = [];
+        io.to(room_id).emit("update-round", room.currentTurn as number);
       } else {
-        room.guessedTeams?.forEach((team) => {
-          console.log("Team guessed:", room.teamScoreBoard);
-          for (let scoreTeamInfo of room.teamScoreBoard) {
-            if (scoreTeamInfo.teamId === team.id) {
-              scoreTeamInfo.score += 100;
-            }
+        // get the team that the drawer is in
+        const drawer: User.Player[] = room.currentDrawer as User.Player[];
+
+        room.teams.forEach((team: Lobby.Team) => {
+          if (team.players[0] === drawer[0]) {
+            team.score += 25 * room.teams.filter((team: Lobby.Team) => team.players[0].hasGuessed).length;
           }
         });
 
-        // TODO: handle turn ended for team mode
-        io.to(roomId).emit("turn-ended", {
-          scores: room.scoreBoard,
-          word: room.currentWord,
-          guessedPlayers: room.guessedPlayers,
-        });
+        io.to(room_id).emit("update-users", room.users as User.Player[]);
+        io.to(room_id).emit("update-teams", room.teams as Lobby.Team[]);
 
-        // TODO: maybe handle in another way the current team drawer
-        room.currentTeamDrawerIndex = (room.currentTeamDrawerIndex + 1) % room.teams.length;
-        room.currentTeamDrawer = room.teams[room.currentTeamDrawerIndex];
+        var index: number = room.teams.findIndex((team: Lobby.Team) => team.players.find((player: User.Player) => player.profile.id === (room.currentDrawer as User.Player[])[0].profile.id));
 
-        if (room.currentTeamDrawerIndex === room.teams.length - 1) {
-          room.currentRound += 1;
-          if (room.currentRound > room.roomSettings.rounds) {
-            endGame(roomId);
+        index = (index + 1) % room.teams.length;
+
+        room.currentDrawer = room.teams[index].players;
+
+        if (index === room.teams.length - 1) {
+          room.currentTurn += 1;
+
+          if (room.currentTurn > room.settings.maxTurn) {
+            _EndGame(room_id);
+
             return;
           }
         }
+      }
 
-        for (let team of room.teams) {
-          team.hasGuessed = false;
+      setTimeout(() => {
+        _StartTurn(room_id);
+      }, 3000);
+    }
+
+    const _EndGame = (room_id: string) => {
+      const room: Lobby.Room | undefined = Lobby.AllRoom[room_id];
+
+      if (!room)
+        return;
+      if (room.settings.gameMode === Lobby.GameMode.Classic) {
+        // Winners represent the 3 players with the highest score
+        const winners: User.Player[] = room.users.sort((a: User.Player, b: User.Player) => b.score - a.score).slice(0, 3);
+
+        io.to(room_id).emit("game-ended", winners as User.Player[]);
+      } else {
+        // Winners represent the best team
+        const winners: Lobby.Team = room.teams.reduce((prev, current) => (prev.score > current.score ? prev : current));
+
+        io.to(room_id).emit("game-ended", winners as Lobby.Team);
+      }
+
+      room.state.isStarted      = false;
+      room.state.canDraw        = false;
+      room.state.isChoosingWord = false;
+      room.state.showScore      = true;
+
+      io.to(room_id).emit("update-state", room.state as Lobby.State);
+    }
+
+    socket.on("update-gamemode", (data: any) => {
+      const { room_id, mode } : { room_id: string, mode: Lobby.GameMode } = data;
+
+      console.log("[update-gamemode | " + socket.id + "]: ", room_id, mode);
+
+      if (!room_id || mode === undefined)
+        return;
+      var room: Lobby.Room | undefined = Lobby.AllRoom[room_id];
+
+      if (!room)
+        return;
+      room.settings.gameMode = mode;
+
+      io.to(room_id).emit("update-settings", room.settings as Lobby.Settings);
+      io.to(room_id).emit("update-gamemode", mode as Lobby.GameMode);
+
+      if (mode === Lobby.GameMode.Team) {
+        var teamNumber: number = room.settings.numTeams;
+
+        room.teams = [] as Lobby.Team[];
+
+        while (room.teams.length < teamNumber) {
+          room.teams.push({
+            id: room.teams.length + 1 as number,
+            name: `Team ${room.teams.length + 1}`,
+            players: [] as User.Player[],
+            score: 0
+          });
         }
 
-        room.guessedTeams = [];
-      }
+        room.users.forEach((player: User.Player, index: number) => {
+          room.teams[index % teamNumber].players.push(player);
+        });
 
-      startTurn(roomId);
-    }
-
-    function endGame(roomId: string) {
-      const room = rooms[roomId];
-
-      if (room.roomSettings.isClassicMode) {
-        const winner = Object.entries(room.scoreBoard).reduce((prev, current) => (prev[1].score > current[1].score ? prev : current));
-        io.to(roomId).emit("game-ended", { winner, scores: Array.from(room.scoreBoard) });
+        io.to(room_id).emit("update-teams", room.teams as Lobby.Team[]);
       } else {
-        const teamWinner = Object.entries(room.teamScoreBoard).reduce((prev, current) => (prev[1].score > current[1].score ? prev : current));
-        // TODO: handle game ended for team mode
-        io.to(roomId).emit("game-ended", { teamWinner, scores: Array.from(room.teamScoreBoard) });
+        room.teams = [] as Lobby.Team[];
+        
+        io.to(room_id).emit("update-teams", room.teams as Lobby.Team[]);
+        io.to(room.id).emit("update-users", room.users as User.Player[]);
       }
-      room.gameStarted = false;
-    }
-
-    /////////////////////////////////////////////////////////// TEAM MANAGEMENT ///////////////////////////////////////////////////////////
-
-    socket.on("change-team-play-mode", ({ roomId }) => {
-      const room = rooms[roomId];
-
-      console.log("Trying Changing team play mode...");
-
-      if (!room || room.gameStarted) return;
-
-      console.log("Changing team play mode...");
-
-      changeTeamPlayMode(room);
-      io.to(roomId).emit("mode-update", { isClassicMode: room.roomSettings.isClassicMode });
-      io.to(roomId).emit("room-data-updated", { room: rooms[roomId] });
     });
 
-    socket.on("add-player-to-a-team", ({ roomId, playerId }) => {
-        const room = rooms[roomId];
+    socket.on("update-number-teams", (data: any) => {
+      const { room_id, numTeams } : { room_id: string, numTeams: number } = data;
 
-        if (!room || room.roomSettings.isClassicMode || room.gameStarted) return;
+      console.log("[update-number-teams | " + socket.id + "]: ", room_id, numTeams);
 
-        const player = room.players.find((player) => player.id === playerId);
-        const team = room.teams.reduce((prev, current) => (prev.players.length < current.players.length ? prev : current));
-        
-        if (!player || !team) return;
+      if (!room_id || numTeams === undefined)
+        return;
+      var room: Lobby.Room | undefined = Lobby.AllRoom[room_id];
 
-        addPlayerToTeam(room, player, team);
-      io.to(roomId).emit("room-data-updated", { room: rooms[roomId] });
+      if (!room)
+        return;
+      var oldTeamsNumber: number = room.settings.numTeams;
+
+      room.settings.numTeams = numTeams;
+
+      if (oldTeamsNumber > numTeams) {
+        room.teams = room.teams.slice(0, numTeams);
+
+        io.to(room_id).emit("update-teams", room.teams as Lobby.Team[]);
+      } else {
+        while (room.teams.length < numTeams) {
+          room.teams.push({
+            id: room.teams.length + 1 as number,
+            name: `Team ${room.teams.length + 1}`,
+            players: [] as User.Player[],
+            score: 0
+          });
+        }
+
+        io.to(room_id).emit("update-teams", room.teams as Lobby.Team[]);
+      }
+
+      io.to(room_id).emit("update-settings", room.settings as Lobby.Settings);
     });
 
-    socket.on("remove-player-from-team", ({ roomId, playerId }) => {
-        const room = rooms[roomId];
+    socket.on("join-team", (data: any) => {
+      const { room_id, team_id } : { room_id: string, team_id: number } = data;
 
-        if (!room || room.roomSettings.isClassicMode || room.gameStarted) return;
+      console.log("[join-team | " + socket.id + "]: ", room_id, team_id);
 
-        const player = room.players.find((player) => player.id === playerId);
-        
-        if (!player) return;
+      if (!room_id || team_id === undefined)
+        return;
+      var room: Lobby.Room | undefined = Lobby.AllRoom[room_id];
 
-        removePlayerFromTeam(room, player);
-      io.to(roomId).emit("room-data-updated", { room: rooms[roomId] });
+      if (!room)
+        return;
+      var team: Lobby.Team | undefined = room.teams.find((checker: Lobby.Team) => checker.id === team_id);
+
+      if (!team)
+        return;
+      var player: User.Player | undefined = room.users.find((checker: User.Player) => checker.profile.id === socket.id);
+
+      if (!player)
+        return;
+      room.teams.forEach((team: Lobby.Team) => {
+        team.players = team.players.filter((checker: User.Player) => checker.profile.id !== socket.id);
+      });
+
+      team.players.push(player);
+
+      io.to(room_id).emit("update-teams", room.teams as Lobby.Team[]);
     });
 
-    socket.on("switch-player-team", ({ roomId, playerId }) => {
-        const room = rooms[roomId];
-        
-        if (!room || room.roomSettings.isClassicMode || room.gameStarted) return;
+    socket.on("update-max-players", (data: any) => {
+      const { room_id, maxPlayer } : { room_id: string, maxPlayer: number } = data;
 
-        console.log("Switching player team...");
+      console.log("[update-max-players | " + socket.id + "]: ", room_id, maxPlayer);
 
-        const player = room.players.find((player) => player.id === playerId);
+      if (!room_id || maxPlayer === undefined)
+        return;
+      var room: Lobby.Room | undefined = Lobby.AllRoom[room_id];
 
-        console.log("Player found:", player);
+      if (!room)
+        return;
+      room.settings.maxPlayer = maxPlayer;
 
-        if (!player) return;
+      if (maxPlayer < room.users.length)
+        room.settings.maxPlayer = room.users.length;
+      io.to(room_id).emit("update-settings", room.settings as Lobby.Settings);
+    });
 
-        console.log("Player found:", player);
+    socket.on("update-draw-time", (data: any) => {
+      const { room_id, time } : { room_id: string, time: number } = data;
 
-        const oldTeamId = player.teamId;
-        removePlayerFromTeam(room, player);
-        const team = room.teams.find((team) => team.id !== oldTeamId);
-        addPlayerToTeam(room, player, team);
-        io.to(roomId).emit("room-data-updated", { room: rooms[roomId] });
+      console.log("[update-draw-time | " + socket.id + "]: ", room_id, time);
+
+      if (!room_id || time === undefined)
+        return;
+      var room: Lobby.Room | undefined = Lobby.AllRoom[room_id];
+
+      if (!room)
+        return;
+      room.settings.drawTime = time;
+
+      io.to(room_id).emit("update-settings", room.settings as Lobby.Settings);
+    });
+
+    socket.on("update-max-rounds", (data: any) => {
+      const { room_id, rounds } : { room_id: string, rounds: number } = data;
+
+      console.log("[update-max-rounds | " + socket.id + "]: ", room_id, rounds);
+
+      if (!room_id || rounds === undefined)
+        return;
+      var room: Lobby.Room | undefined = Lobby.AllRoom[room_id];
+
+      if (!room)
+        return;
+      room.settings.maxTurn = rounds;
+
+      io.to(room_id).emit("update-settings", room.settings as Lobby.Settings);
+    });
+
+    socket.on("update-language", (data: any) => {
+      const { room_id, language } : { room_id: string, language: string } = data;
+
+      console.log("[update-language | " + socket.id + "]: ", room_id, language);
+
+      if (!room_id || !language)
+        return;
+      var room: Lobby.Room | undefined = Lobby.AllRoom[room_id];
+
+      if (!room)
+        return;
+      room.settings.language = language;
+
+      io.to(room_id).emit("update-settings", room.settings as Lobby.Settings);
+    });
+
+    socket.on("update-custom-words-only", (data: any) => {
+      const { room_id, useCustomWordsOnly } : { room_id: string, useCustomWordsOnly: boolean } = data;
+
+      console.log("[update-custom-words-only | " + socket.id + "]: ", room_id, useCustomWordsOnly);
+
+      if (!room_id || useCustomWordsOnly === undefined)
+        return;
+      var room: Lobby.Room | undefined = Lobby.AllRoom[room_id];
+
+      if (!room)
+        return;
+      room.settings.useCustomWordsOnly = useCustomWordsOnly;
+
+      var numberCustomWords: number = room.settings.customWords?.split(';').length || 0;
+
+      if (useCustomWordsOnly && numberCustomWords < 3) {
+        io.to(room_id).emit("message-received", SystemMessage("You need at least 3 custom words to use this option!", WarningColor) as Message);
+
+        room.settings.useCustomWordsOnly = false;
+      }
+
+      io.to(room_id).emit("update-settings", room.settings as Lobby.Settings);
+    });
+
+    socket.on("update-custom-words", (data: any) => {
+      const { room_id, customWords } : { room_id: string, customWords: string } = data;
+
+      console.log("[update-custom-words | " + socket.id + "]: ", room_id, customWords);
+
+      if (!room_id || !customWords)
+        return;
+      var room: Lobby.Room | undefined = Lobby.AllRoom[room_id];
+
+      if (!room)
+        return;
+      room.settings.customWords = customWords;
+
+      io.to(room_id).emit("update-settings", room.settings as Lobby.Settings);
     });
   });
 }

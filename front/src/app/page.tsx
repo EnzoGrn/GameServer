@@ -1,39 +1,51 @@
 'use client';
 
+// -- Icons -- //
+import { MdArrowBackIos } from "react-icons/md";
+
 // -- Components -- //
 import Title from '@/components/header/Title';
 import LabelBlock from '@/components/block/LabelBlock';
 
 // -- Librairies -- //
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { useSocket } from '@/components/provider/SocketProvider';
 import { useRouter, useSearchParams } from 'next/navigation';
-import Random from '@/lib/random/string';
+import { useRoom } from '@/lib/room/RoomProvider';
 
 // -- Types -- //
-import { Room } from '@/lib/type/types';
+import { User } from '@/lib/player/type';
+import { Lobby } from '@/lib/room/type';
+import { createRoom, joinRoom } from '@/lib/room/function';
+import { useSafeEffect } from '@/lib/react/useSafeEffect';
+import Image from "next/image";
+import { useAudio } from "@/lib/audio/audioProvider";
 
-export default function Home()
-{
+export default function Home() {
   // -- Navigation -- //
 
-  const router       = useRouter();
+  const router = useRouter();
   const searchParams = useSearchParams();
 
-  // -- Default inputs fields values -- //
-    // -- Variables -- //
-  const [playerName, setPlayerName] = useState<string>('');
-  const [language  , setLanguage]   = useState<string>('English');
+  // -- Room -- //
 
-    // -- Functions -- //
+  const { setRoom } = useRoom();
+
+  useSafeEffect(() => {
+    setRoom(Lobby.defaultRoom);
+  }, []);
+
+  // -- Default inputs fields values -- //
+  // -- Variables -- //
+  const [profile, setProfile] = useState<User.Profile>({ id: "", name: "", language: "English", avatar: 0 });
+
+  // -- Functions -- //
   const OnPlayerNameChange = (value: string) => {
     let name: string = value;
 
     localStorage.setItem("player", name);
 
-    setPlayerName(name);
-
-    console.log("Player name changed to " + name);
+    setProfile({ ...profile, name: name });
   }
 
   const OnLanguageChange = (value: string) => {
@@ -41,12 +53,25 @@ export default function Home()
 
     localStorage.setItem("language", language);
 
-    setLanguage(language);
-
-    console.log("Language changed to " + language);
+    setProfile({ ...profile, language: language });
   }
 
-    // -- On load -- //
+  const OnAvatarChange = (plus: boolean) => {
+    if (buttonClickAudio) playAudio(buttonClickAudio);
+
+    let avatar: number = profile.avatar;
+
+    if (plus)
+      avatar = (avatar + 1) % 5;
+    else
+      avatar = (avatar - 1 + 5) % 5;
+
+    localStorage.setItem("avatar", avatar.toString());
+
+    setProfile({ ...profile, avatar: avatar });
+  }
+
+  // -- On load -- //
 
   /*
    * @brief When the page is loaded, we get the player name and the language from the local storage.
@@ -54,11 +79,11 @@ export default function Home()
    * And if he never played before, the default values are used.
    */
   useEffect(() => {
-    let name    : string = localStorage.getItem("player")   || "";
+    let name: string = localStorage.getItem("player") || "";
     let language: string = localStorage.getItem("language") || "English";
+    let avatar: number = parseInt(localStorage.getItem("avatar") || "0");
 
-    setPlayerName(name);
-    setLanguage(language);
+    setProfile({ ...profile, name: name, language: language, avatar: avatar });
   }, []);
 
   // -- Socket -- //
@@ -66,156 +91,145 @@ export default function Home()
   const { socket } = useSocket();
 
   useEffect(() => {
-    if (socket) {
-      console.log("Socket is connected");
-
-      socket.on("send-all-rooms", (rooms: { [key: string]: Room }) => {
-        setAvailableRooms(rooms);
-
-        console.log(rooms);
-      });
-
-      socket.emit("get-all-rooms");
-    }
-
-    return () => {
-      socket?.off("send-all-rooms"); // Remove the listener
-    };
+    if (socket)
+      socket?.emit("leave");
   }, [socket]);
+
+  // -- Sound Management -- //
+  const { playAudio } = useAudio();
+  const [buttonClickAudio, setButtonClickAudio] = useState<HTMLAudioElement | null>(null);
+
+  useEffect(() => {
+    const audio = new Audio("/sounds/button-click.mp3");
+    setButtonClickAudio(audio);
+  }, []);
 
   // -- Rooms management -- //
 
-  const [availableRooms, setAvailableRooms] = useState<{ [key: string]: Room }>({}); // List of all available rooms never displayed
-  const [roomCode      , setRoomCode]       = useState<string | null>(null);
+  const [roomCode, setRoomCode] = useState<string | null>(null);
 
   useEffect(() => {
     const code = searchParams.get("code");
 
-    if (code) {
+    if (code)
       setRoomCode(code);
-
-      console.log("Room code found: " + code);
-    }
   }, [searchParams])
 
-  const generatePlayerName = (username: string) : string => {
-    return username || "Player_" + Math.floor(Math.random() * 1000);
-  }
+  // -- Create a room -- //
 
-  const createRoom = () => {
-    if (socket) {
-      const name: string = generatePlayerName(playerName);
+  useEffect(() => {
+    if (!socket)
+      return;
+    socket.on("room-created", (room: Lobby.Room) => {
+      console.log("[room-created]: ", room);
 
-      console.log(name + " is creating a room...");
+      setRoom(room);
 
-      const data = {
-        roomId    : Random.RandString(6),
-        userAvatar: "", // TODO: Add avatar selection
-        userId    : socket.id,
-        userName  : name,
-        timestamp : Date.now()
-      };
+      if (room.id !== undefined)
+        router.push(`/${room.id}`);
+    });
 
-      socket.emit("create-room", data);
-      socket.emit("init-teams", data.roomId);
-
-      console.log("Room created with id " + data.roomId);
-
-      // -- Go to the room -- //
-      router.push(`/${data.roomId}`);
+    return () => {
+      socket.off("room-created");
     }
-  };
+  }, [socket]);
 
-  const join = () => {
-    const joinRoom = (roomId: string) => {
-      if (socket) {
-        const name: string = generatePlayerName(playerName);
+  // -- Join a room -- //
 
-        const data = {
-          roomId    : roomId,
-          userAvatar: "", // TODO: Add avatar selection
-          userId    : socket.id,
-          userName  : name,
-          timestamp : Date.now()
-        };
+  useEffect(() => {
+    if (!socket)
+      return;
+    socket.on("room-joined", (room: Lobby.Room) => {
+      console.log("[room-joined]: ", room);
 
-        // TODO: Check if the room exists, if not, create it
+      setRoom(room);
 
-        socket.emit("join-room", data);
+      if (room.id !== undefined)
+        router.push(`/${room.id}`);
+    });
 
-        console.log(name + " is joining the room " + roomId);
+    return () => {
+      socket.off("room-joined");
+    };
+  }, [socket]);
 
-        // -- Go to the room -- //
-        router.push(`/${roomId}`);
-      }
-    }
+  // -- Player character Management -- //
+  const playerIconsLength = useMemo(() => {
+    return 5; // Number of player icon files in the bear folder
+  }, []);
 
-    if (roomCode) {
-      joinRoom(roomCode);
-    } else {
-      const keys = Object.keys(availableRooms);
-
-      if (keys.length > 0) {
-        const randomKey = keys[Math.floor(Math.random() * keys.length)];
-
-        joinRoom(randomKey);
-      } else {
-        // TODO: Create a room with a random code, and default settings
-        console.log("No room available, creating a new one...");
-      }
-    }
-  }
-
+  // -- Render -- //
   return (
-    <main className="flex flex-col items-center justify-center min-h-screen px-4 py-8">
+    <div className="flex flex-col items-center justify-center min-h-screen px-4 py-8">
 
       {/* Title of the game */}
       <Title title="Draw'It Together" />
-  
+
       {/* Main Section */}
-      <div className="w-full max-w-md p-6 bg-white rounded-lg shadow-lg space-y-6">
+      <main className='flex flex-row justify-between items-center gap-2'>
+        <div className="w-full max-w-md p-6 bg-white rounded-lg shadow-lg space-y-6">
 
-        {/* Label Section */}
-        <div className="w-full flex flex-row justify-between items-center gap-2">
-          <LabelBlock blockName="Player Name">
-            <input
-              type="text"
-              value={playerName}
-              onChange={(e) => OnPlayerNameChange(e.target.value)}
-              placeholder="Enter your name"
-              maxLength={15}
-              className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#f37b78] focus:outline-none"
-            />
-          </LabelBlock>
+          {/* Label Section */}
+          <div className="w-full flex flex-row justify-between items-center gap-2">
+            <LabelBlock blockName="Player Name">
+              <input
+                type="text"
+                value={profile.name}
+                onChange={(e) => OnPlayerNameChange(e.target.value)}
+                placeholder="Enter your name"
+                maxLength={15}
+                className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#f37b78] focus:outline-none"
+              />
+            </LabelBlock>
 
-          <LabelBlock blockName="Language">
-            <select
-              value={language}
-              onChange={(e) => OnLanguageChange(e.target.value)}
-              className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#f37b78] focus:outline-none"
+            <LabelBlock blockName="Language">
+              <select
+                value={profile.language}
+                onChange={(e) => OnLanguageChange(e.target.value)}
+                className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#f37b78] focus:outline-none"
+              >
+                <option value="English">English</option>
+                <option value="French">French</option>
+                {/* -- Add more option */}
+              </select>
+            </LabelBlock>
+          </div>
+
+          <div className="space-y-2">
+            <button
+              onClick={() => joinRoom(socket!, profile, roomCode || undefined)}
+              className="w-full bg-green-500 hover:bg-green-600 text-white py-3 text-xl font-bold rounded-md transition-all"
             >
-              <option value="English">English</option>
-              {/* -- Add more option */}
-            </select>
-          </LabelBlock>
-        </div>
+              Play!
+            </button>
 
-        <div className="space-y-2">
-          <button
-            onClick={join}
-            className="w-full bg-green-500 hover:bg-green-600 text-white py-3 text-xl font-bold rounded-md transition-all"
-          >
-            Play!
-          </button>
+            <button
+              onClick={() => createRoom(socket!, profile)}
+              className="w-full bg-blue-500 hover:bg-blue-600 text-white py-2 rounded-md font-medium transition-all"
+            >
+              Create Private Room
+            </button>
+          </div>
 
-          <button
-            onClick={createRoom}
-            className="w-full bg-blue-500 hover:bg-blue-600 text-white py-2 rounded-md font-medium transition-all"
-          >
-            Create Private Room
-          </button>
-        </div>
-      </div>
-    </main>
+          {/* Choose Character Section */}
+          <div className='w-full h-full max-w-md p-6 bg-white rounded-lg shadow-lg space-y-6'>
+            <p className='text-xl font-bold'>Choose your character !</p>
+            <div className='flex flex-row justify-around items-center h-full'>
+            <MdArrowBackIos
+              className="cursor-pointer"
+              size={50}
+              onClick={() => OnAvatarChange(false)}
+            />
+            <Image className="select-none" src={`/player-icons/bear/${profile.avatar}.png`} alt="Player Character" width={100} height={100} />
+            <MdArrowBackIos
+              size={50}
+              className="rotate-180 cursor-pointer"
+              onClick={() => OnAvatarChange(true)}
+            />
+          </div >
+        </div >
+        </div >
+      </main >
+    </div >
   );
 }

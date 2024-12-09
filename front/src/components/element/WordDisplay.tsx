@@ -18,7 +18,7 @@ const WordDisplay = ({ gameState, word } : { gameState: GameState, word?: string
         <>
           <p className="text-xl font-bold">Word to Guess:</p>
           <p className="text-2xl mt-2 font-mono tracking-[0.25rem]">
-            {word}
+            {Array.from(word).map((char) => (char === " " ? " " : "_")).join("")}
 
             <span className="ml-2 text-sm">{word.length}</span>
           </p>
