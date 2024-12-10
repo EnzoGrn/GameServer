@@ -9,6 +9,9 @@ export function levenshteinDistance(str1: string, str2: string): number {
     for (let i = 0; i <= str1.length; i++) dp[i][0] = i;
     for (let j = 0; j <= str2.length; j++) dp[0][j] = j;
 
+    console.log("DP Before");
+    console.log(dp);
+
     for (let i = 1; i <= str1.length; i++) {
         for (let j = 1; j <= str2.length; j++) {
             if (str1[i - 1] === str2[j - 1]) {
@@ -22,6 +25,11 @@ export function levenshteinDistance(str1: string, str2: string): number {
             }
         }
     }
+
+    console.log("DP After");
+    console.log(dp);
+
+    console.log("Levenshtein Distance: ", dp[str1.length][str2.length]);
 
     return dp[str1.length][str2.length];
 }
