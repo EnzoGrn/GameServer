@@ -35,7 +35,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
           <SocketProvider>
             <AudioProvider>
             <RoomProvider>
-            <div className={`flex justify-center items-center flex-col overflow-hidden bg-[url('assets/background.png')]`}>
+            <div className={`h-screen flex justify-center items-center flex-col overflow-hidden bg-[url('assets/background.png')]`}>
               {children}
             </div>
             </RoomProvider>

@@ -97,8 +97,8 @@ const Chat = () => {
   }
 
   return (
-    <div className="w-full h-full p-4 bg-[#f9f9f9] shadow-md rounded-lg border-[#c44b4a] border-2 flex flex-col order-3 md:order-3 justify-between">
-      <div className="flex-1 overflow-y-auto space-y-2 h-full max-h-[73vh] no-scrollbar">
+    <div className="w-full h-[600px] p-4 bg-[#f9f9f9] shadow-md rounded-lg border-[#c44b4a] border-2 flex flex-col order-3 md:order-3 justify-between">
+      <div className="flex-1 overflow-y-auto space-y-2 max-h-[90%] no-scrollbar">
         {messages.map((msg: Message, index: number) => (
           <div key={index}>
             <MessageView message={msg} />

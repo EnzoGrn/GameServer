@@ -80,4 +80,3 @@ export const ReceivedMessage = (io: Server, socket: Socket, room_id: string, mes
     }
     return { message: message, room: room, isClose: false };
 }
-

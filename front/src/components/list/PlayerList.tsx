@@ -10,6 +10,7 @@ const PlayerList = ({ room }: { room: Lobby.Room }) => {
   const { setRoom } = useRoom();
 
   const [users, setUsers] = useState<User.Player[]>(room.users);
+  const [currentDrawer, setCurrentDrawer] = useState<User.Player | null>(null);
 
   useEffect(() => {
     if (!socket)
@@ -33,12 +34,26 @@ const PlayerList = ({ room }: { room: Lobby.Room }) => {
 
       setUsers(users);
       setRoom({ ...room, users: users });
-    });
+    }); 
 
     return () => {
       socket.off('update-room');
     }
   }, [socket, users, room]);
+
+  useEffect(() => {
+    if (!socket)
+      return;
+    socket.on('update-drawer', (drawer: User.Player) => {
+      console.log("[update-drawer]: ", drawer);
+
+      setCurrentDrawer(drawer);
+    });
+
+    return () => {
+      socket.off('update-drawer');
+    }
+  }, [socket, room]);
 
   return (
     <div className="flex-grow flex flex-col h-full p-4 order-2 min-w-80 max-w-80 max-h-96 overflow-y-visible z-10">
@@ -55,7 +70,7 @@ const PlayerList = ({ room }: { room: Lobby.Room }) => {
                   {player.score} points
                 </span>
               </div>
-              {IsDrawing(room.settings.gameMode, player, room.currentDrawer) &&
+              {currentDrawer?.profile?.id == player.profile.id &&
                 <div
                   className="w-[48px] h-[48px] bg-center bg-cover"
                   style={{

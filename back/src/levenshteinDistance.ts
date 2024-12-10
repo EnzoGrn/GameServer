@@ -1,7 +1,8 @@
 export function levenshteinDistance(str1: string, str2: string): number {
-    if (str1 == null || str1.length === 0 || str2 == null || str2.length === 0) {
+    if (str1 == null || str1.length === 0 || str2 == null || str2.length === 0)
         return -1;
-    }
+    str1 = str1.toLowerCase();
+    str2 = str2.toLowerCase();
 
     const dp = Array.from({ length: str1.length + 1 }, () => Array(str2.length + 1).fill(0));
 
