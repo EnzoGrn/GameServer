@@ -14,7 +14,9 @@ import { User } from "../user/type";
  * -  1: The message is the word.
  */
 const _CheckMessage = (room: Lobby.Room, player: User.Player, message: string): number => {
-    if (message === room.currentWord) {
+    const distance: number = levenshteinDistance(message, room.currentWord);
+
+    if (distance === 0) {
         if (room.settings.gameMode === Lobby.GameMode.Classic) {
             player.hasGuessed = true;
         } else {
@@ -29,8 +31,6 @@ const _CheckMessage = (room: Lobby.Room, player: User.Player, message: string): 
 
         return 1;
     } else {
-        const distance: number = levenshteinDistance(message, room.currentWord);
-
         if (distance < 2 && distance > 0)
             return 0;
     }
