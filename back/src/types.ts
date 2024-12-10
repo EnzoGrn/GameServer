@@ -13,12 +13,12 @@ export interface Player {
     kicksGot: Player[];
     userAvatar?: string;
     timestamp?: number;
+    teamId?: string;
 }
 
 export interface Room {
     id: string;
     players: Player[];
-    messages: any[];
     scoreBoard: ScoreBoard[];
     customWords: string[];
     guessedPlayers: Player[];
@@ -37,14 +37,23 @@ export interface Room {
         hints: number;
         private: boolean;
         useCustomWords: boolean;
+        isClassicMode: boolean;
     };
+    // Teams
+    teams: Team[];
+    teamScoreBoard: TeamScoreBoard[];
+    currentTeamDrawer: Team;
+    currentTeamDrawerIndex: number;
+    guessedTeams: Team[];
 }
 
-export interface Message {
-    text: string;
-    timestamp: number;
-    bgColor: string;
-    color: string;
-    isPrivate?: boolean;
-    senderId?: string;
+export interface Team {
+    id: string;
+    players: Player[];
+    hasGuessed: boolean;
+}
+
+export interface TeamScoreBoard {
+    teamId: string;
+    score: number;
 }
