@@ -1,7 +1,5 @@
 import { Server, Socket } from "socket.io";
-import { rooms } from "./rooms";
 import { SelectWords } from "./tools/words";
-import { changeTeamPlayMode, addPlayerToTeam, removePlayerFromTeam } from "./teams";
 import { ReceivedMessage, SystemMessage } from "./chat/chat";
 import { SendCommandToUser } from "./tools/command";
 import { ErrorColor, OrangeColor, WarningColor } from "./tools/color";
