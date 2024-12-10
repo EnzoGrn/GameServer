@@ -596,7 +596,7 @@ export default function Page()
   };
 
   return (
-    <div className="min-h-screen w-full grid grid-cols-[auto_2fr_1fr] grid-rows-[auto_1fr_auto] gap-2">
+    <div className="max-h-screen h-screen w-full grid grid-cols-[auto_2fr_1fr] grid-rows-[auto_1fr_auto] gap-2">
 
       {/* Header */}
       <div className="col-span-3 w-full bg-[#f37b78] text-white p-4 flex justify-between items-center border-b-2 border-b-[#c44b4a]">
@@ -618,14 +618,14 @@ export default function Page()
         <div className="relative w-full">
           <div
             ref={canvasParentRef}
-            className="absolute w-full h-64 md:h-96 bg-white border border-gray-300 rounded-md shadow-sm"
+            className="absolute w-full h-96 bg-white border border-gray-300 rounded-md shadow-sm"
           >
             {/* The canvas will dynamically load here */}
           </div>
 
           {/* Overlay if game has not started */}
           {!isStarted && !showScore && (
-            <div className="absolute w-full h-64 md:h-96 bg-gray-800 bg-opacity-70 rounded-md flex flex-col justify-center items-center z-10">
+            <div className="absolute w-full h-96 bg-gray-800 bg-opacity-70 rounded-md flex flex-col justify-center items-center z-10">
               {!room.isDefault && me?.isHost && (
                 <div className="w-full h-auto max-h-full rounded-md overflow-y-auto p-4">
                 <div className="flex flex-row w-full justify-between gap-4">
@@ -678,7 +678,7 @@ export default function Page()
                       onChange={(e) => handleMaxPlayersChange(Number(e.target.value))}
                     />
                   </div>
-              
+
                   {/* Nombre d'équipes */}
                   {settings.gameMode === Lobby.GameMode.Team && (
                     <div className="flex flex-col space-y-2 w-full">
@@ -777,7 +777,7 @@ export default function Page()
 
           {/* Choosing word */}
           {isStarted && !canDraw && (
-            <div className="absolute w-full h-64 md:h-96 bg-gray-800 bg-opacity-70 rounded-md flex flex-col justify-center items-center z-10">
+            <div className="absolute w-full h-96 bg-gray-800 bg-opacity-70 rounded-md flex flex-col justify-center items-center z-10">
               {isChoosingWord && wordList?.length > 0 ? (
                 <div className="flex flex-col items-center">
                   <div className="text-white font-bold text-lg mb-4">
@@ -810,7 +810,7 @@ export default function Page()
 
           {/* Game ended / Show scores */}
           {showScore && (
-            <div className="absolute w-full h-64 md:h-96 bg-gray-800 bg-opacity-70 rounded-md flex flex-col justify-center items-center z-10">
+            <div className="absolute w-full h-96 bg-gray-800 bg-opacity-70 rounded-md flex flex-col justify-center items-center z-10">
               <div className="w-32 h-32 bg-center bg-cover mb-4" style={{ backgroundImage: "url('score.gif')" }} />
               {settings.gameMode === Lobby.GameMode.Classic && (winners as User.Player[])?.map((winner, index) => (
                 <div
@@ -839,7 +839,7 @@ export default function Page()
           {/* Invisible canvas for interaction */}
           <div
             ref={hiddenCanvasRef}
-            className="relative top-0 left-0 w-full h-64 md:h-96 bg-transparent z-[-1]"
+            className="relative top-0 left-0 w-full h-96 bg-transparent z-[-1]"
           />
         </div>
 
@@ -857,9 +857,11 @@ export default function Page()
       </div>
 
       {/* Footer with the invitation link */}
-      <footer className="col-span-2 p-4 flex items-end justify-center">
-        <InvitationBox invitationCode={inviteLink} />
-      </footer>
+      {!isStarted &&
+        <footer className="col-span-2 p-4 flex items-end justify-center">
+          <InvitationBox invitationCode={inviteLink} />
+        </footer>
+      }
     </div>
   );
 }

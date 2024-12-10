@@ -314,6 +314,7 @@ export function setupSocket(io: Server) {
         });
       }
 
+      io.to(room_id).emit("update-drawer", room.currentDrawer as User.Player | User.Player[]);
       io.to(room_id).emit("update-users", room.users as User.Player[]);
     };
 
@@ -353,6 +354,8 @@ export function setupSocket(io: Server) {
           if (timeLeft <= 0 || guessed === room.users.length - 1) {
             clearInterval(timer); // To stop the timer
             _EndTurn(room_id);
+
+            return;
           }
         } else {
           var everyOneGuessed: boolean = true;
@@ -364,16 +367,20 @@ export function setupSocket(io: Server) {
                 everyOneGuessed = false;
           });
 
-          if (timeLeft <= 0 || everyOneGuessed) {
+          if (everyOneGuessed) {
             clearInterval(timer);
             _EndTurn(room_id);
+
+            return;
           }
         }
 
         // If the time is over, we stop the timer and go to the next turn
-        if (timeLeft <= 0) {
+        if (timeLeft <= 0 || everyOneGuessed) {
           clearInterval(timer);
           _EndTurn(room_id);
+
+          return;
         }
       }, 1000);
     };
@@ -399,6 +406,7 @@ export function setupSocket(io: Server) {
 
       io.to(room_id).emit("turn-ended", room.currentWord as string);
 
+      room.currentWord   = "";
       room.state.canDraw = false;
         
       io.to(room_id).emit("update-state", room.state as Lobby.State);
@@ -416,6 +424,8 @@ export function setupSocket(io: Server) {
         index = (index + 1) % room.users.length;
 
         room.currentDrawer = room.users[index];
+
+        console.log("TA GROSSE DARONNE, ELLE EST TELLEMENT GROSSE QUE T'AS PAS PU LA METTRE DANS LE CODE");
 
         if (index === room.users.length - 1) {
           room.currentTurn += 1;
