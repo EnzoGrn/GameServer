@@ -12,7 +12,8 @@ const DrawingTools = ({ onToolChange } : any) => {
     { name: "eraser", label: "🧽 Eraser" },
   ];
 
-  const colors = ["#000000", "#FF0000", "#00FF00", "#0000FF", "#FFFF00", "#FF00FF", "#00FFFF", "#FFFFFF"];
+  const colors = ["#000000", "#808080", "#C0C0C0", "#FFFFFF", "#800000", "#FF0000", "#FFA500", "#FFFF00", "#808000", "#008000", "#00FF00", "#008080"];
+  const colors2 = ["#00FFFF", "#000080", "#0000FF", "#800080", "#FF00FF", "#A52A2A", "#8B4513", "#F5DEB3", "#D2691E", "#87CEEB", "#4682B4", "#D3D3D3"];
 
   const handleToolChange = (tool: ToolsType) => {
     setActiveTool(tool);
@@ -36,15 +37,27 @@ const DrawingTools = ({ onToolChange } : any) => {
     <div className="w-full flex flex-row justify-around p-4 mt-2 bg-[#f9f9f9] border-2 border-[#c44b4a] rounded-lg shadow-md space-y-4">
       <div>
         <h3 className="text-sm font-bold mb-2">Couleur</h3>
-        <div className="flex space-x-2">
-          {colors.map((color) => (
-            <button
-              key={color}
-              className={`w-8 h-8 rounded-full border-2 ${selectedColor === color ? "border-black" : "border-transparent"}`}
-              style={{ backgroundColor: color }}
-              onClick={() => handleColorChange(color)}
-            />
-          ))}
+        <div className="space-y-[2px]">
+          <div className="flex space-x-[2px]">
+            {colors.map((color) => (
+              <button
+                key={color}
+                className={`w-8 h-8 border-2 ${selectedColor === color ? "border-black" : "border-transparent"}`}
+                style={{ backgroundColor: color }}
+                onClick={() => handleColorChange(color)}
+              />
+            ))}
+          </div>
+          <div className="flex space-x-[2px]">
+            {colors2.map((color) => (
+              <button
+                key={color}
+                className={`w-8 h-8 border-2 ${selectedColor === color ? "border-black" : "border-transparent"}`}
+                style={{ backgroundColor: color }}
+                onClick={() => handleColorChange(color)}
+              />
+            ))}
+          </div>
         </div>
       </div>
 
@@ -71,7 +84,7 @@ const DrawingTools = ({ onToolChange } : any) => {
         <input
           type="range"
           min="1"
-          max="20"
+          max="50"
           value={toolSize}
           onChange={(e) => handleSizeChange(e.target.value)}
           className="w-full"
